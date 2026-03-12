@@ -1,0 +1,61 @@
+/*
+ * SPDX-License-Identifier: Apache-2.0
+ * nRF7002-DK device tree overlay for ZephyrClaw
+ *
+ * Ensures storage_partition exists for NVS.
+ * The nRF7002-DK (nRF5340) internal flash layout already includes a
+ * storage partition in the upstream DTS; this overlay confirms it.
+ */
+
+/ {
+    chosen {
+        zephyr,console = &uart0;
+        zephyr,shell-uart = &uart0;
+        /*
+         * Do NOT add zephyr,entropy here.
+         * nRF5340 app core has no RNG peripheral in DTS.
+         * The psa-crypto-rng driver calls psa_crypto_init() at PRE_KERNEL_1
+         * before the heap is ready, causing a hard fault with no output.
+         * Instead, use TEST_RANDOM_GENERATOR + TIMER_RANDOM_GENERATOR in prj.conf
+         * to satisfy sys_rand_get(). TLS crypto RNG is handled separately by
+         * MBEDTLS_PSA_CRYPTO_EXTERNAL_RNG (set in board defconfig).
+         */
+    };
+};
+
+/*
+ * Ensure NVS storage partition is available.
+ * On nRF5340 the storage partition is typically defined in:
+ *   boards/nordic/nrf7002dk/nrf5340_cpuapp_common.dtsi
+ * If it is missing on your SDK version, uncomment and adjust below:
+ */
+
+/*
+&flash0 {
+    partitions {
+        compatible = "fixed-partitions";
+        #address-cells = <1>;
+        #size-cells = <1>;
+
+        boot_partition: partition@0 {
+            label = "mcuboot";
+            reg = <0x00000000 0x00010000>;
+        };
+
+        slot0_partition: partition@10000 {
+            label = "image-0";
+            reg = <0x00010000 0x00070000>;
+        };
+
+        slot1_partition: partition@80000 {
+            label = "image-1";
+            reg = <0x00080000 0x00070000>;
+        };
+
+        storage_partition: partition@f0000 {
+            label = "storage";
+            reg = <0x000f0000 0x00008000>;
+        };
+    };
+};
+*/
