@@ -39,8 +39,8 @@ An open-source embedded AI agent running on the **Nordic nRF7002-DK** developmen
 
 | Module | File | Purpose |
 |--------|------|---------|
-| **Config** | `config.h/c` | LLM endpoint, model, API key (RAM) + settings persistence |
-| **Memory** | `memory.h/c` | In-RAM conversation history + settings-persisted rolling summary |
+| **Config** | `config.h/c` | LLM endpoint, model, API key + WiFi credentials (settings persistence) |
+| **Memory** | `memory.h/c` | k_mem_slab conversation history + settings-persisted rolling summary |
 | **LLM Client** | `llm_client.h/c` | HTTPS POST to OpenAI-compatible Chat Completions API |
 | **Tools** | `tools.h/c` | Atomic hardware actions: GPIO, uptime, heap, board info |
 | **Skills** | `skill.h/c` | Multi-step reusable workflows (blink, SOS, status, clear) |
@@ -70,26 +70,24 @@ Max iterations per turn: **10**
 
 ### Conversation Memory
 
-History uses two `K_FIFO` queues over a **10-node static pool**:
+History uses a **10-node static pool** (`k_mem_slab`) backed by a `sys_slist_t` linked list ordered oldest → newest.
 
-- `g_free_fifo` — idle nodes (starts full)
-- `g_history_fifo` — in-use nodes, FIFO order (oldest → newest)
-
-When `g_free_fifo` is empty on `memory_add_turn()`:
-1. **Compress** — the 7 oldest nodes are summarised by the LLM into one; 6 are returned to `g_free_fifo`.
+When `k_mem_slab_alloc` fails on `memory_add_turn()`:
+1. **Compress** — the oldest nodes are summarised by the LLM; the source nodes are freed back to the slab.
 2. **Evict** *(fallback if compression fails)* — the oldest history node is recycled directly.
 
-After each exchange, a rolling summary is written to NVS and injected as prior context on the next boot.
+After each compression, the rolling summary is written to NVS and injected as prior context on the next boot.
 
-**NVS layout:**
+**Settings layout (subtree "zc"):**
 
-| ID | Key | Type |
-|----|-----|------|
-| 1 | `session_counter` | `uint32_t` |
-| 2 | `conversation_summary` | `char[768]` |
-| 3 | `turn_count` | `uint32_t` |
+| Settings key | Type | Notes |
+|---|---|---|
+| `zc/summary` | `char[768]` | Conversation summary (managed by memory.c) |
+| `zc/apikey` | `char[256]` | Optional — only saved via `claw key-save` |
+| `zc/wifi/ssid` | `char[33]` | Saved by `claw wifi connect` |
+| `zc/wifi/pass` | `char[65]` | Saved by `claw wifi connect` |
 
-The API key is **never** written to NVS.
+The API key is RAM-only by default; use `claw key-save` to optionally persist it.
 
 ---
 
@@ -124,8 +122,10 @@ screen /dev/ttyACM0 115200
 ### 3. Connect to WiFi
 
 ```
-uart:~$ wifi connect -s <SSID> -p <password>
+uart:~$ claw wifi connect <SSID> <password>
 ```
+
+Credentials are saved to flash. On the next reboot, the board auto-connects without any manual command.
 
 ### 4. Set API Key
 
@@ -133,11 +133,11 @@ uart:~$ wifi connect -s <SSID> -p <password>
 uart:~$ claw key sk-...
 ```
 
-The key is held in RAM only and lost on reboot. Use `claw key-save` to persist it to NVS.
+The key is held in RAM only and lost on reboot. Use `claw key-save` to persist it to flash.
 
 ### 5. (Optional) Configure Endpoint
 
-Default endpoint is `xxx:443`. To use OpenAI directly:
+Default endpoint is `api.openai.com:443`. To use OpenAI directly:
 
 ```
 uart:~$ claw host api.openai.com
@@ -172,14 +172,22 @@ All commands are subcommands of `claw`.
 | Command | Description |
 |---------|-------------|
 | `claw key <key>` | Set API key (RAM only, not persisted) |
-| `claw key-save` | Save current API key to NVS flash |
-| `claw key-delete` | Delete API key from NVS flash |
+| `claw key-save` | Save current API key to flash |
+| `claw key-delete` | Delete API key from flash |
 | `claw host <hostname>` | Set LLM endpoint host |
 | `claw path <path>` | Set LLM API path |
 | `claw model <name>` | Set model name |
 | `claw provider <id>` | Set `X-Model-Provider-Id` header |
 | `claw tls <on\|off> [port]` | Enable/disable TLS and set port |
 | `claw status` | Show current config and agent state |
+
+### WiFi
+
+| Command | Description |
+|---------|-------------|
+| `claw wifi connect <ssid> [pass]` | Connect to WiFi and save credentials to flash |
+| `claw wifi disconnect` | Disconnect from current WiFi network |
+| `claw wifi status` | Show saved SSID |
 
 ### Conversation
 
@@ -277,6 +285,7 @@ skill_register("my_skill", "Description of what it does", my_skill);
 ## Security Notes
 
 - **API key** is RAM-only by default. It is cleared on power cycle and never written to flash unless you explicitly run `claw key-save`.
+- **WiFi passphrase** is stored in flash as plain text when you use `claw wifi connect`. Anyone with physical flash access can read it. Acceptable for dev boards; use additional protections in production.
 - **TLS peer verification** is set to `NONE` by default (development mode). For production, supply a CA certificate and change verify mode to `TLS_PEER_VERIFY_REQUIRED`.
 - **NVS summary** is stored as plain text. Avoid sensitive information in conversations if flash readout is a concern.
 

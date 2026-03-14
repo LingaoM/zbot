@@ -8,20 +8,26 @@
  * All user-facing commands are under the "claw" root command.
  *
  * Usage:
- *   claw key <api-key>           -- Set API key (persisted)
- *   claw host <hostname>         -- Set LLM endpoint host
- *   claw path <path>             -- Set LLM API path
- *   claw model <model>           -- Set model name
- *   claw tls <on|off> [port]     -- Configure TLS
- *   claw status                  -- Show current config status
- *   claw chat <message>          -- Send a message to the agent
- *   claw history                 -- Show conversation history
- *   claw summary                 -- Show persisted NVS summary
- *   claw clear                   -- Clear conversation history
- *   claw wipe                    -- Wipe history + NVS summary
- *   claw skill list              -- List all registered skills
- *   claw skill run <name> [arg]  -- Run a skill directly
- *   claw tools                   -- List all available tools
+ *   claw key <api-key>                -- Set API key (RAM only)
+ *   claw key-save                     -- Persist API key to flash
+ *   claw key-delete                   -- Delete API key from flash
+ *   claw host <hostname>              -- Set LLM endpoint host
+ *   claw path <path>                  -- Set LLM API path
+ *   claw model <model>                -- Set model name
+ *   claw provider <id>                -- Set X-Model-Provider-Id header
+ *   claw tls <on|off> [port]          -- Configure TLS
+ *   claw status                       -- Show current config status
+ *   claw wifi connect <ssid> [pass]   -- Connect to WiFi (saves credentials)
+ *   claw wifi disconnect              -- Disconnect from WiFi
+ *   claw wifi status                  -- Show saved SSID and connection state
+ *   claw chat <message>               -- Send a message to the agent
+ *   claw history                      -- Show conversation history
+ *   claw summary                      -- Show persisted NVS summary
+ *   claw clear                        -- Clear conversation history
+ *   claw wipe                         -- Wipe history + NVS summary
+ *   claw skill list                   -- List all registered skills
+ *   claw skill run <name> [arg]       -- Run a skill directly
+ *   claw tools                        -- List all available tools
  */
 
 #include <zephyr/kernel.h>
@@ -429,12 +435,74 @@ static int cmd_tools(const struct shell *sh, size_t argc, char **argv)
 }
 
 /* ------------------------------------------------------------------ */
+/* claw wifi connect / disconnect / status                             */
+/* ------------------------------------------------------------------ */
+
+static int cmd_wifi_connect(const struct shell *sh, size_t argc, char **argv)
+{
+	const char *pass;
+	int rc;
+
+	if (argc < 2) {
+		shell_print(sh, "Usage: claw wifi connect <ssid> [passphrase]");
+		shell_print(sh, "Credentials are saved to flash for auto-connect on next boot.");
+		return -EINVAL;
+	}
+
+	pass = argc >= 3 ? argv[2] : "";
+	rc = config_wifi_connect(argv[1], pass);
+	if (rc == 0) {
+		shell_print(sh, "WiFi connect request sent to SSID: %s", argv[1]);
+		shell_print(sh, "Credentials saved — will auto-connect on reboot.");
+	} else {
+		shell_error(sh, "WiFi connect failed: %d", rc);
+	}
+	return rc;
+}
+
+static int cmd_wifi_disconnect(const struct shell *sh, size_t argc, char **argv)
+{
+	int rc;
+
+	ARG_UNUSED(argc);
+	ARG_UNUSED(argv);
+
+	rc = config_wifi_disconnect();
+	if (rc == 0) {
+		shell_print(sh, "WiFi disconnect requested.");
+	} else {
+		shell_error(sh, "WiFi disconnect failed: %d", rc);
+	}
+	return rc;
+}
+
+static int cmd_wifi_status(const struct shell *sh, size_t argc, char **argv)
+{
+	char ssid[CONFIG_WIFI_SSID_MAX_LEN];
+
+	ARG_UNUSED(argc);
+	ARG_UNUSED(argv);
+
+	config_wifi_get_ssid(ssid, sizeof(ssid));
+	shell_print(sh, "Saved SSID : %s", ssid[0] ? ssid : "(none)");
+	shell_print(sh, "Use 'claw status' for full config including WiFi state.");
+	return 0;
+}
+
+/* ------------------------------------------------------------------ */
 /* ------------------------------------------------------------------ */
 
 SHELL_STATIC_SUBCMD_SET_CREATE(sub_skill, SHELL_CMD(list, NULL, "List all skills", cmd_skill_list),
 			       SHELL_CMD_ARG(run, NULL, "Run a skill: run <name> [arg]",
 					     cmd_skill_run, 2, 1),
 			       SHELL_SUBCMD_SET_END);
+
+SHELL_STATIC_SUBCMD_SET_CREATE(sub_wifi,
+	SHELL_CMD_ARG(connect, NULL, "Connect: wifi connect <ssid> [pass]",
+		      cmd_wifi_connect, 2, 1),
+	SHELL_CMD(disconnect, NULL, "Disconnect from current WiFi", cmd_wifi_disconnect),
+	SHELL_CMD(status, NULL, "Show saved WiFi SSID", cmd_wifi_status),
+	SHELL_SUBCMD_SET_END);
 
 SHELL_STATIC_SUBCMD_SET_CREATE(
 	sub_claw, SHELL_CMD_ARG(key, NULL, "Set API key (RAM only): key <key>", cmd_key, 2, 0),
@@ -446,6 +514,7 @@ SHELL_STATIC_SUBCMD_SET_CREATE(
 	SHELL_CMD_ARG(provider, NULL, "Set X-Model-Provider-Id: provider <id>", cmd_provider, 2, 0),
 	SHELL_CMD_ARG(tls, NULL, "Configure TLS: tls <on|off> [port]", cmd_tls, 2, 1),
 	SHELL_CMD(status, NULL, "Show current configuration", cmd_status),
+	SHELL_CMD(wifi, &sub_wifi, "WiFi commands", NULL),
 	SHELL_CMD_ARG(chat, NULL, "Chat with the agent: chat <message>", cmd_chat, 2, 32),
 	SHELL_CMD(history, NULL, "Show conversation history", cmd_history),
 	SHELL_CMD(summary, NULL, "Show NVS persisted summary", cmd_summary),

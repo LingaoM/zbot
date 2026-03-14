@@ -7,8 +7,10 @@
  *
  * Runtime LLM configuration (RAM) and persistent storage (settings).
  * Persistent keys (subtree "zc"):
- *   "zc/summary" : conversation summary (string)
- *   "zc/apikey"  : API key — loaded at boot, applied to RAM config
+ *   "zc/apikey"   : API key (optional) — loaded at boot, applied to RAM config
+ *   "zc/wifi/ssid": WiFi SSID
+ *   "zc/wifi/pass": WiFi passphrase
+ * Note: "zc/summary" is managed by memory.c under the same settings subtree.
  */
 
 #ifndef ZEPHYRCLAW_CONFIG_H
@@ -16,6 +18,7 @@
 
 #include <stdbool.h>
 #include <stdint.h>
+#include <stddef.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -26,6 +29,8 @@ extern "C" {
 #define CONFIG_ENDPOINT_MAX_LEN    128
 #define CONFIG_MODEL_MAX_LEN       64
 #define CONFIG_PROVIDER_ID_MAX_LEN 64
+#define CONFIG_WIFI_SSID_MAX_LEN   33  /* IEEE 802.11: max 32 bytes + NUL */
+#define CONFIG_WIFI_PASS_MAX_LEN   65  /* WPA2: max 63 chars + NUL */
 
 /**
  * @brief Runtime LLM configuration (RAM only, except api_key which can be
@@ -79,7 +84,40 @@ int config_save_api_key(const char *key);
 /** @brief Delete the persisted API key from flash. */
 int config_delete_api_key(void);
 
-/** @brief Print current config to serial (redacts API key). */
+/**
+ * @brief Save WiFi credentials to flash and trigger a connection attempt.
+ *
+ * Persists SSID and passphrase under "zc/wifi/ssid" and "zc/wifi/pass",
+ * then calls wifi_connect() on the default interface.
+ *
+ * @param ssid  Network SSID (max CONFIG_WIFI_SSID_MAX_LEN-1 chars).
+ * @param pass  Passphrase (max CONFIG_WIFI_PASS_MAX_LEN-1 chars).
+ *              Pass NULL or empty string for open networks.
+ * @return 0 on success, negative errno on failure.
+ */
+int config_wifi_connect(const char *ssid, const char *pass);
+
+/** @brief Disconnect from current WiFi network. */
+int config_wifi_disconnect(void);
+
+/**
+ * @brief Attempt connection using previously saved credentials.
+ *
+ * Called automatically on boot by config_init() if credentials exist.
+ *
+ * @return 0 if connection was attempted, -ENOENT if no credentials stored.
+ */
+int config_wifi_auto_connect(void);
+
+/**
+ * @brief Get saved WiFi SSID (empty string if not saved).
+ *
+ * @param buf  Output buffer.
+ * @param len  Buffer size.
+ */
+void config_wifi_get_ssid(char *buf, size_t len);
+
+/** @brief Print current config to serial (redacts API key and WiFi password). */
 void config_print_status(void);
 
 #ifdef __cplusplus

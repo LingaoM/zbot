@@ -5,17 +5,22 @@
  * ZephyrClaw - Main Entry Point
  *
  * Boot sequence:
- *   1. Initialise config (LLM connection defaults)
- *   2. Initialise memory (NVS mount, load persisted summary)
- *   3. Register built-in skills
- *   4. Initialise agent
- *   5. Wait for WiFi (managed by WPA supplicant via shell/auto-connect)
- *   6. Print welcome banner + instructions
- *   7. Idle — all interaction is via Shell commands (claw ...)
+ *   1. memory_init()  — NVS mount, load persisted summary ("zc/summary")
+ *   2. config_init()  — load API key + WiFi credentials from flash, trigger
+ *                       auto-connect if credentials were previously saved
+ *   3. skills_register_builtins()
+ *   4. agent_init()
+ *   5. Register WiFi event callback (connect/disconnect notifications)
+ *   6. Print welcome banner
+ *   7. Idle — all interaction via Shell commands (claw ...)
  *
- * IMPORTANT: The API key must be set at runtime via the shell:
- *     claw key sk-...
- * It is never stored in flash to prevent accidental key exposure.
+ * WiFi:
+ *   Use 'claw wifi connect <ssid> [pass]' to connect and save credentials.
+ *   On next boot, config_init() auto-connects using the saved credentials.
+ *
+ * API key:
+ *   'claw key <key>'      — set in RAM for this session
+ *   'claw key-save'       — persist to flash (optional)
  */
 
 #include <zephyr/kernel.h>
@@ -72,19 +77,21 @@ static void print_banner(void)
 	printk("╚══════════════════════════════════════════════╝\n");
 	printk("\n");
 	printk("Quick start:\n");
-	printk("  1. Connect to WiFi:\n");
-	printk("       wifi connect -s <SSID> -p <password>\n");
-	printk("  2. Set API key (not stored to flash):\n");
-	printk("       claw key sk-...\n");
+	printk("  1. Connect to WiFi (saves credentials for auto-connect):\n");
+	printk("       claw wifi connect <SSID> <password>\n");
+	printk("  2. Set API key:\n");
+	printk("       claw key sk-...          -- RAM only (cleared on reboot)\n");
+	printk("       claw key-save            -- also persist to flash\n");
 	printk("  3. [Optional] Change model/endpoint:\n");
 	printk("       claw model gpt-4o-mini\n");
 	printk("       claw host api.openai.com\n");
 	printk("  4. Chat:\n");
 	printk("       claw chat Hello! What can you do?\n");
 	printk("  5. Other commands:\n");
-	printk("       claw status    -- show config\n");
-	printk("       claw history   -- show conversation\n");
-	printk("       claw summary   -- show NVS summary\n");
+	printk("       claw status              -- show config + WiFi SSID\n");
+	printk("       claw wifi status         -- show saved WiFi SSID\n");
+	printk("       claw history             -- show conversation\n");
+	printk("       claw summary             -- show NVS summary\n");
 	printk("       claw skill list\n");
 	printk("       claw tools\n");
 	printk("\n");
@@ -105,7 +112,7 @@ int main(void)
 		LOG_WRN("Memory/NVS init warning: %d (continuing without persistence)", rc);
 	}
 
-	/* 2. Config — load WiFi credentials + API key from NVS, auto-connect */
+	/* 2. Config — load API key + WiFi credentials from NVS; auto-connect WiFi */
 	config_init();
 
 	/* 3. Skills */
