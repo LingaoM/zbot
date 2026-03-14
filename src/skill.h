@@ -1,9 +1,9 @@
 /*
- * Copyright (c) 2026 LingaoMeng
+ * Copyright (c) 2026 Lingao Meng
  *
  * SPDX-License-Identifier: Apache-2.0
  *
- * ZephyrClaw - Skill Framework
+ * ZBot - Skill Framework
  *
  * Skills are higher-level, reusable capabilities built on top of Tools.
  * While Tools are atomic hardware/OS operations, Skills are multi-step
@@ -13,8 +13,8 @@
  * The agent can list and invoke skills by name.
  */
 
-#ifndef ZEPHYRCLAW_SKILL_H
-#define ZEPHYRCLAW_SKILL_H
+#ifndef ZBOT_SKILL_H
+#define ZBOT_SKILL_H
 
 #include <stddef.h>
 
@@ -84,4 +84,4 @@ void skills_register_builtins(void);
 }
 #endif
 
-#endif /* ZEPHYRCLAW_SKILL_H */
+#endif /* ZBOT_SKILL_H */

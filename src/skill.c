@@ -1,9 +1,9 @@
 /*
- * Copyright (c) 2026 LingaoMeng
+ * Copyright (c) 2026 Lingao Meng
  *
  * SPDX-License-Identifier: Apache-2.0
  *
- * ZephyrClaw - Skill Framework Implementation
+ * ZBot - Skill Framework Implementation
  */
 
 #include <zephyr/kernel.h>
@@ -17,13 +17,10 @@
 #include "tools.h"
 #include "memory.h"
 
-LOG_MODULE_REGISTER(zephyrclaw_skill, LOG_LEVEL_INF);
+LOG_MODULE_REGISTER(zbot_skill, LOG_LEVEL_INF);
 
 static struct skill_descriptor g_skills[SKILL_MAX_COUNT];
 static int g_skill_count = 0;
-
-/* ------------------------------------------------------------------ */
-/* ------------------------------------------------------------------ */
 
 /* Skill: blink_led — blink LED0 N times */
 static int skill_blink_led(const char *arg, char *result, size_t res_len)
@@ -99,9 +96,6 @@ static int skill_clear_memory(const char *arg, char *result, size_t res_len)
 	return 0;
 }
 
-/* ------------------------------------------------------------------ */
-/* ------------------------------------------------------------------ */
-
 int skill_register(const char *name, const char *description, skill_fn fn)
 {
 	if (!name || !description || !fn) {
@@ -140,7 +134,7 @@ int skill_run(const char *name, const char *arg, char *result, size_t res_len)
 
 void skill_list(void)
 {
-	printk("=== ZephyrClaw Skills (%d registered) ===\n", g_skill_count);
+	printk("=== zbot Skills (%d registered) ===\n", g_skill_count);
 	for (int i = 0; i < g_skill_count; i++) {
 		printk("  %-20s %s\n", g_skills[i].name, g_skills[i].description);
 	}

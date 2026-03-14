@@ -1,14 +1,14 @@
-# Copyright (c) 2026 LingaoMeng
+# Copyright (c) 2026 Lingao Meng
 # SPDX-License-Identifier: Apache-2.0
 #
-# ZephyrClaw - An open-source embedded AI Agent for Zephyr RTOS
+# ZBot - An open-source embedded AI Agent for Zephyr RTOS
 # Target: nRF7002-DK (nRF5340 + nRF7002 WiFi)
 
 cmake_minimum_required(VERSION 3.20.0)
 
 find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
 
-project(zephyrclaw VERSION 0.1.0)
+project(ZBot VERSION 0.1.0)
 
 target_sources(app PRIVATE
     src/main.c
@@ -22,3 +22,11 @@ target_sources(app PRIVATE
 )
 
 target_include_directories(app PRIVATE src)
+
+set(gen_dir ${ZEPHYR_BINARY_DIR}/include/generated/)
+
+generate_inc_file_for_target(
+    app
+    src/certs/openrouter/cert-3.der
+    ${gen_dir}/openrouter/https-cert.der.inc
+)

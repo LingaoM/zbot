@@ -1,6 +1,9 @@
 /*
+ * Copyright (c) 2026 Lingao Meng
+ *
  * SPDX-License-Identifier: Apache-2.0
- * ZephyrClaw - LLM Client Implementation
+ *
+ * ZBot - LLM Client Implementation
  *
  * Uses Zephyr's BSD-socket API + HTTP client to call OpenAI-compatible APIs.
  * TLS (mbedTLS) is used for HTTPS. The CA certificate bundle must be provided
@@ -16,47 +19,15 @@
 #include <stdio.h>
 #include <errno.h>
 
+#include "certs/openrouter/ca_certificate.h"
+
 #include "llm_client.h"
 #include "config.h"
 
-LOG_MODULE_REGISTER(zephyrclaw_llm, LOG_LEVEL_INF);
-
-/* TLS credential tag for the CA certificate */
-#define LLM_TLS_TAG 42
+LOG_MODULE_REGISTER(zbot_llm, LOG_LEVEL_INF);
 
 /* HTTP request timeout (ms) */
 #define LLM_HTTP_TIMEOUT_MS 30000
-
-/* ------------------------------------------------------------------ */
-/* ------------------------------------------------------------------ */
-
-static char g_recv_buf[LLM_BUF_LEN];
-static size_t g_recv_len;
-
-/* http_response_cb_t requires int return since Zephyr 4.x */
-static int http_response_cb(struct http_response *rsp, enum http_final_call final_data,
-			    void *user_data)
-{
-	if (rsp->data_len > 0) {
-		size_t to_copy = rsp->data_len;
-		if (g_recv_len + to_copy >= LLM_RESPONSE_BUF_LEN - 1) {
-			to_copy = LLM_RESPONSE_BUF_LEN - 1 - g_recv_len;
-		}
-		if (to_copy > 0) {
-			memcpy(g_recv_buf + g_recv_len, rsp->recv_buf, to_copy);
-			g_recv_len += to_copy;
-		}
-	}
-
-	if (final_data == HTTP_DATA_FINAL) {
-		g_recv_buf[g_recv_len] = '\0';
-		LOG_DBG("HTTP response complete (%zu bytes)", g_recv_len);
-	}
-	return 0;
-}
-
-/* ------------------------------------------------------------------ */
-/* ------------------------------------------------------------------ */
 
 /*
  * Extract a JSON string value from a buffer.
@@ -64,13 +35,16 @@ static int http_response_cb(struct http_response *rsp, enum http_final_call fina
  */
 static int extract_json_str(const char *json, const char *key, char *out, size_t out_len)
 {
+	char search[80];
+	const char *pos;
+	size_t i = 0;
+
 	if (!json || !key || !out) {
 		return -EINVAL;
 	}
 
-	char search[80];
 	snprintf(search, sizeof(search), "\"%s\"", key);
-	const char *pos = strstr(json, search);
+	pos = strstr(json, search);
 	if (!pos) {
 		return -ENOENT;
 	}
@@ -88,7 +62,6 @@ static int extract_json_str(const char *json, const char *key, char *out, size_t
 	}
 	pos++;
 
-	size_t i = 0;
 	while (*pos != '\0' && i + 1 < out_len) {
 		if (*pos == '\\') {
 			pos++;
@@ -120,6 +93,12 @@ static int extract_json_str(const char *json, const char *key, char *out, size_t
  */
 static int parse_llm_response(const char *json, struct llm_response *resp)
 {
+	char finish_reason[32] = {0};
+	bool has_tool_calls_field = false;
+	const char *tc_pos;
+	const char *val;
+	const char *fn_pos;
+
 	memset(resp, 0, sizeof(*resp));
 	resp->finish_reason = LLM_FINISH_ERROR;
 
@@ -131,6 +110,7 @@ static int parse_llm_response(const char *json, struct llm_response *resp)
 	/* Check for error response */
 	if (strstr(json, "\"error\"")) {
 		char err_msg[128] = {0};
+
 		extract_json_str(json, "message", err_msg, sizeof(err_msg));
 		LOG_ERR("LLM API error: %s", err_msg);
 		return -EIO;
@@ -139,16 +119,14 @@ static int parse_llm_response(const char *json, struct llm_response *resp)
 	/* Extract finish_reason from choices[0].
 	 * Some providers return finish_reason=null when tool_calls are present,
 	 * so also check for the presence of a "tool_calls" array. */
-	char finish_reason[32] = {0};
 	extract_json_str(json, "finish_reason", finish_reason, sizeof(finish_reason));
 
 	/* Detect tool_calls: must have the field AND it must not be null/empty.
 	 * "tool_calls\":null" and "tool_calls\":[]" mean no tool call. */
-	bool has_tool_calls_field = false;
-	const char *tc_pos = strstr(json, "\"tool_calls\"");
+	tc_pos = strstr(json, "\"tool_calls\"");
 	if (tc_pos) {
 		/* Skip past the key to the value */
-		const char *val = tc_pos + strlen("\"tool_calls\"");
+		val = tc_pos + strlen("\"tool_calls\"");
 		while (*val == ' ' || *val == ':' || *val == '\t') {
 			val++;
 		}
@@ -173,13 +151,13 @@ static int parse_llm_response(const char *json, struct llm_response *resp)
 
 	/* Parse tool_calls if present */
 	if (resp->has_tool_call) {
-		const char *tc_pos = strstr(json, "\"tool_calls\"");
+		tc_pos = strstr(json, "\"tool_calls\"");
 		if (tc_pos) {
 			/* Extract tool call id */
 			extract_json_str(tc_pos, "id", resp->tool_call.id,
 					 sizeof(resp->tool_call.id));
 			/* Extract function name */
-			const char *fn_pos = strstr(tc_pos, "\"function\"");
+			fn_pos = strstr(tc_pos, "\"function\"");
 			if (fn_pos) {
 				extract_json_str(fn_pos, "name", resp->tool_call.name,
 						 LLM_TOOL_NAME_MAX_LEN);
@@ -195,28 +173,13 @@ static int parse_llm_response(const char *json, struct llm_response *resp)
 	return 0;
 }
 
-/* ------------------------------------------------------------------ */
-/* ------------------------------------------------------------------ */
-
-static int build_request_body(llm_messages_cb_t messages_cb, llm_tools_cb_t tools_cb,
-			      char *buf, size_t buf_len, void *args)
+static int build_request_body(llm_messages_cb_t messages_cb, llm_tools_cb_t tools_cb, char *buf,
+			      size_t buf_len, void *args)
 {
-	const struct llm_config *cfg = config_get();
 	const size_t tools_key_len = 9; /* ",\"tools\":" */
 	size_t pos = 0;
 	int tools_n;
 	int n;
-
-	n = snprintf(buf + pos, buf_len - pos,
-		     "{\"model\":\"%s\","
-		     "\"max_completion_tokens\":%d,"
-		     "\"messages\":",
-		     cfg->model, cfg->max_tokens);
-	if (n < 0 || (size_t)n >= buf_len - pos) {
-		return -ENOMEM;
-	}
-
-	pos += n;
 
 	n = messages_cb(buf + pos, buf_len - pos, args);
 	if (n <= 0) {
@@ -255,8 +218,16 @@ static int build_request_body(llm_messages_cb_t messages_cb, llm_tools_cb_t tool
 	return (int)pos;
 }
 
-/* ------------------------------------------------------------------ */
-/* ------------------------------------------------------------------ */
+void llm_client_init(void)
+{
+	int rc;
+
+	rc = tls_credential_add(CA_CERTIFICATE_TAG, TLS_CREDENTIAL_CA_CERTIFICATE,
+				ca_openrouter_certificate, sizeof(ca_openrouter_certificate));
+	if (rc < 0 && rc != -EEXIST) {
+		LOG_ERR("Failed to add CA certificate: %d", rc);
+	}
+}
 
 static int resolve_and_connect(const struct llm_config *cfg)
 {
@@ -264,30 +235,50 @@ static int resolve_and_connect(const struct llm_config *cfg)
 	struct zsock_addrinfo *res = NULL;
 	char port_str[8];
 	int sock = -1;
+	int rc;
 
 	hints.ai_family = AF_INET;
 	hints.ai_socktype = SOCK_STREAM;
 
 	snprintf(port_str, sizeof(port_str), "%u", cfg->port);
 
-	int rc = zsock_getaddrinfo(cfg->endpoint_host, port_str, &hints, &res);
+	rc = zsock_getaddrinfo(cfg->endpoint_host, port_str, &hints, &res);
 	if (rc != 0) {
 		LOG_ERR("DNS resolution failed for %s: %d", cfg->endpoint_host, rc);
 		return -EHOSTUNREACH;
 	}
 
 	if (cfg->use_tls) {
-		sec_tag_t sec_tag_list[] = {LLM_TLS_TAG};
+		sec_tag_t sec_tag_list[] = {CA_CERTIFICATE_TAG};
+		int verify;
 
 		sock = zsock_socket(AF_INET, SOCK_STREAM, IPPROTO_TLS_1_2);
-		if (sock >= 0) {
-			zsock_setsockopt(sock, SOL_TLS, TLS_SEC_TAG_LIST, sec_tag_list,
-					 sizeof(sec_tag_list));
-			zsock_setsockopt(sock, SOL_TLS, TLS_HOSTNAME, cfg->endpoint_host,
-					 strlen(cfg->endpoint_host));
-			/* For development: skip peer verify if no CA cert loaded */
-			int verify = TLS_PEER_VERIFY_NONE;
-			zsock_setsockopt(sock, SOL_TLS, TLS_PEER_VERIFY, &verify, sizeof(verify));
+		if (sock < 0) {
+			LOG_ERR("TLS socket create failed: errno=%d", errno);
+			zsock_freeaddrinfo(res);
+			return -errno;
+		}
+
+		rc = zsock_setsockopt(sock, SOL_TLS, TLS_SEC_TAG_LIST,
+				      sec_tag_list, sizeof(sec_tag_list));
+		if (rc < 0) {
+			LOG_ERR("TLS_SEC_TAG_LIST failed: errno=%d", errno);
+			return errno;
+		}
+
+		verify = cfg->tls_verify ? TLS_PEER_VERIFY_REQUIRED : TLS_PEER_VERIFY_NONE;
+		rc = zsock_setsockopt(sock, SOL_TLS, TLS_PEER_VERIFY, &verify, sizeof(verify));
+		if (rc < 0) {
+			LOG_ERR("TLS_PEER_VERIFY failed: errno=%d", errno);
+			return errno;
+		}
+
+		rc = zsock_setsockopt(sock, SOL_TLS, TLS_HOSTNAME,
+				      cfg->endpoint_host,
+				      strlen(cfg->endpoint_host));
+		if (rc < 0) {
+			LOG_ERR("TLS_HOSTNAME failed: errno=%d", errno);
+			return errno;
 		}
 	} else {
 		sock = zsock_socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
@@ -311,20 +302,31 @@ static int resolve_and_connect(const struct llm_config *cfg)
 	return sock;
 }
 
-/* ------------------------------------------------------------------ */
-/* ------------------------------------------------------------------ */
-
-int llm_chat(llm_messages_cb_t messages_cb, llm_tools_cb_t tools_cb,
-	     struct llm_response *resp, void *args)
+static int http_response_cb(struct http_response *rsp, enum http_final_call final_data,
+			    void *user_data)
 {
-	static const char *referer_header = "HTTP-Referer: https://github.com/LingaoM/zephyrclaw\r\n";
+	ARG_UNUSED(rsp);
+	ARG_UNUSED(final_data);
+	ARG_UNUSED(user_data);
+
+	return 0;
+}
+
+int llm_chat(llm_messages_cb_t messages_cb, llm_tools_cb_t tools_cb, struct llm_response *resp,
+	     void *args)
+{
+	static const char *referer_header = "HTTP-Referer: https://github.com/LingaoM/zbot\r\n";
 	static const char *content_type = "Content-Type: application/json\r\n";
-	static const char *title_header = "X-Title: zephyrclaw tests\r\n";
+	static const char *title_header = "X-Title: zbot tests\r\n";
 	static char provider_header[CONFIG_PROVIDER_ID_MAX_LEN + 32];
 	static char auth_header[CONFIG_API_KEY_MAX_LEN + 32];
-	static char req_body[LLM_BUF_LEN];
+	static char rsp_body[LLM_RESPONSE_BUF_LEN];
+	static char req_body[LLM_REQUEST_BUF_LEN];
 	const struct llm_config *cfg;
-	int body_len, sock, rc;
+	struct http_request req = {0};
+	int body_len;
+	int sock;
+	int rc;
 
 	if (!messages_cb || !resp) {
 		return -EINVAL;
@@ -333,7 +335,7 @@ int llm_chat(llm_messages_cb_t messages_cb, llm_tools_cb_t tools_cb,
 	cfg = config_get();
 
 	if (!config_has_api_key()) {
-		LOG_ERR("API key not set. Use: claw key <your-api-key>");
+		LOG_ERR("API key not set. Use: zbot key <your-api-key>");
 		return -EACCES;
 	}
 
@@ -374,22 +376,20 @@ int llm_chat(llm_messages_cb_t messages_cb, llm_tools_cb_t tools_cb,
 	};
 
 	/* Prepare receive buffer and response struct */
-	memset(g_recv_buf, 0, sizeof(g_recv_buf));
-	g_recv_len = 0;
+	memset(rsp_body, 0, sizeof(rsp_body));
 
-	struct http_request req = {0};
 	req.method = HTTP_POST;
 	req.url = cfg->endpoint_path;
 	req.host = cfg->endpoint_host;
 	req.protocol = "HTTP/1.1";
 	req.header_fields = extra_headers;
+	req.response = http_response_cb;
 	req.payload = req_body;
 	req.payload_len = (size_t)body_len;
-	req.response = http_response_cb;
-	req.recv_buf = (uint8_t *)req_body;
-	req.recv_buf_len = sizeof(req_body);
+	req.recv_buf = rsp_body;
+	req.recv_buf_len = sizeof(rsp_body) - 1;
 
-	LOG_INF("Sending LLM request to %s%s", cfg->endpoint_host, cfg->endpoint_path);
+	LOG_DBG("Sending LLM request to %s%s", cfg->endpoint_host, cfg->endpoint_path);
 
 	rc = http_client_req(sock, &req, LLM_HTTP_TIMEOUT_MS, NULL);
 	zsock_close(sock);
@@ -402,6 +402,6 @@ int llm_chat(llm_messages_cb_t messages_cb, llm_tools_cb_t tools_cb,
 	resp->http_status = req.internal.response.http_status_code;
 
 	/* Parse the response JSON */
-	rc = parse_llm_response(g_recv_buf, resp);
+	rc = parse_llm_response(rsp_body, resp);
 	return rc;
 }

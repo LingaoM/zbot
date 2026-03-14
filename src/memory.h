@@ -1,15 +1,15 @@
 /*
- * Copyright (c) 2026 LingaoMeng
+ * Copyright (c) 2026 Lingao Meng
  *
  * SPDX-License-Identifier: Apache-2.0
  *
- * ZephyrClaw - Memory Module
+ * ZBot - Memory Module
  *
  * Manages conversation history in RAM using a k_mem_slab pool and a
  * sys_slist_t, and persists a rolling summary via Zephyr settings subsystem.
  *
  * Settings keys:
- *   "zc/summary" : conversation summary (string)
+ *   "zbot/summary" : conversation summary (string)
  *
  * History strategy:
  *   - g_node_slab    : k_mem_slab of MEMORY_HISTORY_POOL_SIZE nodes.
@@ -20,8 +20,8 @@
  *   - On boot, the persisted summary is injected as a prior-context message.
  */
 
-#ifndef ZEPHYRCLAW_MEMORY_H
-#define ZEPHYRCLAW_MEMORY_H
+#ifndef ZBOT_MEMORY_H
+#define ZBOT_MEMORY_H
 
 #include <stdint.h>
 #include <stddef.h>
@@ -98,8 +98,20 @@ int memory_wipe_all(void);
  */
 void memory_dump(void);
 
+/**
+ * @brief Escape a string for embedding inside a JSON string value.
+ *
+ * Escapes `"`, `\`, `\n`, `\r`, and control characters.
+ *
+ * @param src     Input string.
+ * @param dst     Output buffer.
+ * @param dst_len Output buffer size.
+ * @return Number of bytes written (excluding NUL).
+ */
+int zbot_json_escape(const char *src, char *dst, size_t dst_len);
+
 #ifdef __cplusplus
 }
 #endif
 
-#endif /* ZEPHYRCLAW_MEMORY_H */
+#endif /* ZBOT_MEMORY_H */

@@ -1,9 +1,9 @@
 /*
- * Copyright (c) 2026 LingaoMeng
+ * Copyright (c) 2026 Lingao Meng
  *
  * SPDX-License-Identifier: Apache-2.0
  *
- * ZephyrClaw - Tools Module
+ * ZBot - Tools Module
  *
  * Tools are the primitive actions the Agent can invoke. Each tool has:
  *   - name        : snake_case identifier used in LLM function calling
@@ -15,8 +15,8 @@
  * knows what it can call. Results are returned as JSON strings.
  */
 
-#ifndef ZEPHYRCLAW_TOOLS_H
-#define ZEPHYRCLAW_TOOLS_H
+#ifndef ZBOT_TOOLS_H
+#define ZBOT_TOOLS_H
 
 #include <stddef.h>
 
@@ -98,4 +98,4 @@ int tool_echo(const char *args_json, char *result, size_t res_len);
 }
 #endif
 
-#endif /* ZEPHYRCLAW_TOOLS_H */
+#endif /* ZBOT_TOOLS_H */

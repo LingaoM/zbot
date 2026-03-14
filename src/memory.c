@@ -1,12 +1,12 @@
 /*
- * Copyright (c) 2026 LingaoMeng
+ * Copyright (c) 2026 Lingao Meng
  *
  * SPDX-License-Identifier: Apache-2.0
  *
- * ZephyrClaw - Memory Module Implementation
+ * ZBot - Memory Module Implementation
  *
- * Persistence uses Zephyr settings subsystem (subtree "zc"):
- *   "zc/summary"  : conversation summary (string)
+ * Persistence uses Zephyr settings subsystem (subtree "zbot"):
+ *   "zbot/summary"  : conversation summary (string)
  *
  * History strategy:
  *   g_node_slab   : k_mem_slab pool of MEMORY_HISTORY_POOL_SIZE nodes
@@ -28,10 +28,11 @@
 #include <stdio.h>
 #include <errno.h>
 
+#include "config.h"
 #include "memory.h"
 #include "agent.h"
 
-LOG_MODULE_REGISTER(zephyrclaw_memory, LOG_LEVEL_INF);
+LOG_MODULE_REGISTER(zbot_memory, LOG_LEVEL_INF);
 
 /* ------------------------------------------------------------------ */
 /* ------------------------------------------------------------------ */
@@ -60,25 +61,21 @@ static int zc_settings_set(const char *name, size_t len, settings_read_cb read_c
 	size_t read_len;
 	int rc;
 
-	if (strcmp(name, "summary") == 0) {
-		read_len = MIN(len, sizeof(g_summary) - 1);
-		rc = read_cb(cb_arg, g_summary, read_len);
-		if (rc >= 0) {
-			g_summary[read_len] = '\0';
-		}
-
-		return rc < 0 ? rc : 0;
+	read_len = MIN(len, sizeof(g_summary) - 1);
+	rc = read_cb(cb_arg, g_summary, read_len);
+	if (rc >= 0) {
+		g_summary[read_len] = '\0';
 	}
 
-	return -ENOENT;
+	return rc < 0 ? rc : 0;
 }
 
-SETTINGS_STATIC_HANDLER_DEFINE(zc, "zc", NULL, zc_settings_set, NULL, NULL);
+SETTINGS_STATIC_HANDLER_DEFINE(zbot, "zbot/summary", NULL, zc_settings_set, NULL, NULL);
 
 /* ------------------------------------------------------------------ */
 /* ------------------------------------------------------------------ */
 
-static int json_escape(const char *src, char *dst, size_t dst_len)
+int zbot_json_escape(const char *src, char *dst, size_t dst_len)
 {
 	size_t j = 0;
 
@@ -106,9 +103,6 @@ static int json_escape(const char *src, char *dst, size_t dst_len)
 	dst[j] = '\0';
 	return (int)j;
 }
-
-/* ------------------------------------------------------------------ */
-/* ------------------------------------------------------------------ */
 
 /*
  * history_format_fn - agent_format_fn_t callback defined in memory.c.
@@ -156,7 +150,7 @@ static int try_compress(void)
 		return rc;
 	}
 
-	settings_save_one("zc/summary", g_summary, strlen(g_summary) + 1);
+	settings_save_one("zbot/summary", g_summary, strlen(g_summary) + 1);
 
 	for (i = 0; i < MEMORY_COMPRESS_COUNT; i++) {
 		n = sys_slist_get(&g_history_list);
@@ -186,7 +180,7 @@ int memory_init(void)
 		return rc;
 	}
 
-	rc = settings_load_subtree("zc");
+	rc = settings_load_subtree("zbot");
 	if (rc) {
 		LOG_WRN("settings_load_subtree failed: %d", rc);
 	}
@@ -204,7 +198,7 @@ int memory_add_turn(const char *role, const char *content)
 {
 	struct memory_node *node;
 	sys_snode_t *n;
-	int rc, i, j;
+	int rc;
 
 	if (!role || !content) {
 		return -EINVAL;
@@ -232,23 +226,17 @@ int memory_add_turn(const char *role, const char *content)
 
 	strncpy(node->role, role, MEMORY_ROLE_MAX_LEN - 1);
 	node->role[MEMORY_ROLE_MAX_LEN - 1] = '\0';
-	for (i = 0, j = 0; i < MEMORY_MSG_MAX_LEN - 1; i++) {
-		if (content[i] == '\"') {
-			continue;
-		}
-		if (content[i] == '\0') {
-			break;
-		}
-		node->content[j++] = content[i];
-	}
-	node->content[j] = '\0';
+	strncpy(node->content, content, MEMORY_MSG_MAX_LEN - 1);
+	node->content[MEMORY_MSG_MAX_LEN - 1] = '\0';
 
 	sys_slist_append(&g_history_list, &node->node);
+
 	return 0;
 }
 
 int memory_build_messages_json(char *buf, size_t buf_len)
 {
+	const struct llm_config *cfg = config_get();
 	struct memory_node *cur;
 	size_t pos;
 	int n;
@@ -259,24 +247,35 @@ int memory_build_messages_json(char *buf, size_t buf_len)
 
 	pos = 0;
 
+	n = snprintf(buf + pos, buf_len - pos,
+		     "{\"model\":\"%s\","
+		     "\"max_completion_tokens\":%d,"
+		     "\"messages\":",
+		     cfg->model, cfg->max_tokens);
+	if (n < 0 || (size_t)n >= buf_len - pos) {
+		return -ENOMEM;
+	}
+
+	pos += n;
+
 	n = snprintf(buf + pos, buf_len - pos, "[{\"role\":\"system\",\"content\":\"");
 	if (n < 0 || (size_t)n >= buf_len - pos) {
-		goto overflow;
+		return -ENOMEM;
 	}
 
 	pos += n;
 
 	/* 1. System message — escape directly into buf */
-	n = json_escape(agent_get_system_prompt(), buf + pos, buf_len - pos);
+	n = zbot_json_escape(AGENT_SYSTEM_PROMPT, buf + pos, buf_len - pos);
 	if ((size_t)n >= buf_len - pos) {
-		goto overflow;
+		return -ENOMEM;
 	}
 
 	pos += n;
 
 	n = snprintf(buf + pos, buf_len - pos, "\"}");
 	if (n < 0 || (size_t)n >= buf_len - pos) {
-		goto overflow;
+		return -ENOMEM;
 	}
 
 	pos += n;
@@ -287,14 +286,14 @@ int memory_build_messages_json(char *buf, size_t buf_len)
 			     ",{\"role\":\"user\","
 			     "\"content\":\"[Context from prior sessions] ");
 		if (n < 0 || (size_t)n >= buf_len - pos) {
-			goto overflow;
+			return -ENOMEM;
 		}
 
 		pos += n;
 
-		n = json_escape(g_summary, buf + pos, buf_len - pos);
+		n = zbot_json_escape(g_summary, buf + pos, buf_len - pos);
 		if ((size_t)n >= buf_len - pos) {
-			goto overflow;
+			return -ENOMEM;
 		}
 
 		pos += n;
@@ -303,7 +302,7 @@ int memory_build_messages_json(char *buf, size_t buf_len)
 			     "\"},{ \"role\":\"assistant\","
 			     "\"content\":\"Understood. I recall the prior context.\"}");
 		if (n < 0 || (size_t)n >= buf_len - pos) {
-			goto overflow;
+			return -ENOMEM;
 		}
 
 		pos += n;
@@ -314,21 +313,21 @@ int memory_build_messages_json(char *buf, size_t buf_len)
 		n = snprintf(buf + pos, buf_len - pos, ",{\"role\":\"%s\",\"content\":\"",
 			     cur->role);
 		if (n < 0 || (size_t)n >= buf_len - pos) {
-			goto overflow;
+			return -ENOMEM;
 		}
 
 		pos += n;
 
-		n = json_escape(cur->content, buf + pos, buf_len - pos);
+		n = zbot_json_escape(cur->content, buf + pos, buf_len - pos);
 		if ((size_t)n >= buf_len - pos) {
-			goto overflow;
+			return -ENOMEM;
 		}
 
 		pos += n;
 
 		n = snprintf(buf + pos, buf_len - pos, "\"}");
 		if (n < 0 || (size_t)n >= buf_len - pos) {
-			goto overflow;
+			return -ENOMEM;
 		}
 
 		pos += n;
@@ -336,15 +335,12 @@ int memory_build_messages_json(char *buf, size_t buf_len)
 
 	n = snprintf(buf + pos, buf_len - pos, "]");
 	if (n < 0 || (size_t)n >= buf_len - pos) {
-		goto overflow;
+		return -ENOMEM;
 	}
 
 	pos += n;
-	return (int)pos;
 
-overflow:
-	LOG_ERR("messages JSON buffer overflow");
-	return -ENOMEM;
+	return (int)pos;
 }
 
 const char *memory_get_summary(void)
@@ -368,9 +364,12 @@ void memory_clear_history(void)
 int memory_wipe_all(void)
 {
 	memory_clear_history();
+
 	memset(g_summary, 0, sizeof(g_summary));
-	settings_delete("zc/summary");
+	settings_delete("zbot/summary");
+
 	LOG_INF("Summary wiped");
+
 	return 0;
 }
 
@@ -379,7 +378,7 @@ void memory_dump(void)
 	struct memory_node *node;
 	int i = 0;
 
-	printk("=== ZephyrClaw Memory Dump ===\n");
+	printk("=== ZBot Memory Dump ===\n");
 	printk("  Summary     : %s\n", g_summary[0] ? g_summary : "(none)");
 	printk("  History:\n");
 

@@ -1,9 +1,9 @@
 /*
- * Copyright (c) 2026 LingaoMeng
+ * Copyright (c) 2026 Lingao Meng
  *
  * SPDX-License-Identifier: Apache-2.0
  *
- * ZephyrClaw - Tools Module Implementation
+ * ZBot - Tools Module Implementation
  */
 
 #include <zephyr/kernel.h>
@@ -18,11 +18,11 @@
 
 #include "tools.h"
 
-LOG_MODULE_REGISTER(zephyrclaw_tools, LOG_LEVEL_INF);
+LOG_MODULE_REGISTER(zbot_tools, LOG_LEVEL_INF);
 
 /* ------------------------------------------------------------------ */
-/* GPIO aliases from nRF7002-DK device tree */
-/* LED0..LED1 and BUTTON0..BUTTON1 */
+/* GPIO aliases from nRF7002-DK device tree                           */
+/* LED0..LED1 and BUTTON0..BUTTON1                                    */
 /* ------------------------------------------------------------------ */
 
 #define LED0_NODE DT_ALIAS(led0)
@@ -39,7 +39,7 @@ static const struct gpio_dt_spec g_led1 = GPIO_DT_SPEC_GET(LED1_NODE, gpios);
 static const struct gpio_dt_spec g_btn0 = GPIO_DT_SPEC_GET(BTN0_NODE, gpios);
 #endif
 
-static bool g_gpio_init = false;
+static bool g_gpio_init;
 
 static void ensure_gpio_init(void)
 {
@@ -66,7 +66,7 @@ static void ensure_gpio_init(void)
 }
 
 /* ------------------------------------------------------------------ */
-/* Tiny JSON helpers */
+/* Tiny JSON helpers                                                  */
 /* ------------------------------------------------------------------ */
 
 /*
@@ -76,13 +76,15 @@ static void ensure_gpio_init(void)
  */
 static int json_get_int(const char *json, const char *key, int default_val)
 {
+	char search[64];
+	const char *pos;
+
 	if (!json || !key) {
 		return default_val;
 	}
 
-	char search[64];
 	snprintf(search, sizeof(search), "\"%s\"", key);
-	const char *pos = strstr(json, search);
+	pos = strstr(json, search);
 	if (!pos) {
 		return default_val;
 	}
@@ -104,13 +106,16 @@ static int json_get_int(const char *json, const char *key, int default_val)
  */
 static int json_get_str(const char *json, const char *key, char *out, size_t out_len)
 {
+	char search[64];
+	const char *pos;
+	size_t i = 0;
+
 	if (!json || !key || !out) {
 		return -EINVAL;
 	}
 
-	char search[64];
 	snprintf(search, sizeof(search), "\"%s\"", key);
-	const char *pos = strstr(json, search);
+	pos = strstr(json, search);
 	if (!pos) {
 		return -ENOENT;
 	}
@@ -124,7 +129,6 @@ static int json_get_str(const char *json, const char *key, char *out, size_t out
 	}
 	pos++; /* skip opening " */
 
-	size_t i = 0;
 	while (*pos != '\0' && *pos != '"' && i + 1 < out_len) {
 		if (*pos == '\\') {
 			pos++; /* skip escape */
@@ -135,17 +139,14 @@ static int json_get_str(const char *json, const char *key, char *out, size_t out
 	return (int)i;
 }
 
-/* ------------------------------------------------------------------ */
-/* ------------------------------------------------------------------ */
-
 int tool_gpio_read(const char *args_json, char *result, size_t res_len)
 {
+	char pin_name[16] = {0};
+	int val = -1;
+
 	ensure_gpio_init();
 
-	char pin_name[16] = {0};
 	json_get_str(args_json, "pin", pin_name, sizeof(pin_name));
-
-	int val = -1;
 
 #if DT_NODE_HAS_STATUS(BTN0_NODE, okay)
 	if (strcmp(pin_name, "button0") == 0 || strcmp(pin_name, "btn0") == 0) {
@@ -183,18 +184,19 @@ int tool_gpio_read(const char *args_json, char *result, size_t res_len)
 
 int tool_gpio_write(const char *args_json, char *result, size_t res_len)
 {
+	char pin_name[16] = {0};
+	int value;
+	int rc = -ENODEV;
+
 	ensure_gpio_init();
 
-	char pin_name[16] = {0};
 	json_get_str(args_json, "pin", pin_name, sizeof(pin_name));
-	int value = json_get_int(args_json, "value", -1);
+	value = json_get_int(args_json, "value", -1);
 
 	if (value < 0 || value > 1) {
 		snprintf(result, res_len, "{\"error\":\"value must be 0 or 1\"}");
 		return -EINVAL;
 	}
-
-	int rc = -ENODEV;
 
 #if DT_NODE_HAS_STATUS(LED0_NODE, okay)
 	if (strcmp(pin_name, "led0") == 0 && device_is_ready(g_led0.port)) {
@@ -219,8 +221,11 @@ int tool_gpio_write(const char *args_json, char *result, size_t res_len)
 
 int tool_get_uptime(const char *args_json, char *result, size_t res_len)
 {
+	int64_t uptime_ms;
+
 	ARG_UNUSED(args_json);
-	int64_t uptime_ms = k_uptime_get();
+
+	uptime_ms = k_uptime_get();
 	snprintf(result, res_len, "{\"uptime_ms\":%lld,\"uptime_s\":%lld}", uptime_ms,
 		 uptime_ms / 1000);
 	return 0;
@@ -229,12 +234,13 @@ int tool_get_uptime(const char *args_json, char *result, size_t res_len)
 int tool_get_board_info(const char *args_json, char *result, size_t res_len)
 {
 	ARG_UNUSED(args_json);
+
 	snprintf(result, res_len,
 		 "{\"board\":\"nrf7002dk\","
 		 "\"soc\":\"nRF5340\","
 		 "\"wifi_chip\":\"nRF7002\","
 		 "\"rtos\":\"Zephyr\","
-		 "\"agent\":\"ZephyrClaw\","
+		 "\"agent\":\"zbot\","
 		 "\"version\":\"0.1.0\"}");
 	return 0;
 }
@@ -249,6 +255,7 @@ int tool_get_heap_info(const char *args_json, char *result, size_t res_len)
 #if defined(CONFIG_SYS_HEAP_RUNTIME_STATS)
 	struct sys_memory_stats stats;
 	extern struct k_heap z_malloc_heap;
+
 	sys_heap_runtime_stats_get(&z_malloc_heap.heap, &stats);
 	snprintf(result, res_len,
 		 "{\"free_bytes\":%zu,\"allocated_bytes\":%zu,"
@@ -266,13 +273,11 @@ int tool_get_heap_info(const char *args_json, char *result, size_t res_len)
 int tool_echo(const char *args_json, char *result, size_t res_len)
 {
 	char message[128] = {0};
+
 	json_get_str(args_json, "message", message, sizeof(message));
 	snprintf(result, res_len, "{\"echo\":\"%s\"}", message);
 	return 0;
 }
-
-/* ------------------------------------------------------------------ */
-/* ------------------------------------------------------------------ */
 
 static const struct tool_descriptor g_tools[] = {
 	{

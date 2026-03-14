@@ -1,9 +1,9 @@
 /*
- * Copyright (c) 2026 LingaoMeng
+ * Copyright (c) 2026 Lingao Meng
  *
  * SPDX-License-Identifier: Apache-2.0
  *
- * ZephyrClaw - Agent Module
+ * ZBot - Agent Module
  *
  * The Agent is the core reasoning loop (ReAct pattern):
  *
@@ -22,8 +22,8 @@
  * agent_submit_input(). The response is delivered via a callback.
  */
 
-#ifndef ZEPHYRCLAW_AGENT_H
-#define ZEPHYRCLAW_AGENT_H
+#ifndef ZBOT_AGENT_H
+#define ZBOT_AGENT_H
 
 #include <stddef.h>
 
@@ -37,17 +37,37 @@ extern "C" {
 #define AGENT_INPUT_MAX_LEN  512
 #define AGENT_OUTPUT_MAX_LEN 1024
 
+/* clang-format off */
+#define AGENT_SYSTEM_PROMPT                                                    \
+	"You are zbot, an open-source embedded AI agent running on a "         \
+	"Nordic nRF7002-DK development board powered by Zephyr RTOS. "         \
+	"You are concise, helpful, and hardware-aware. "                        \
+	"You can control GPIOs, read sensors, and manage the device. "          \
+	"When using tools, always reason step-by-step before acting. "          \
+	"Keep responses short and suitable for a serial terminal."
+/* clang-format on */
+
+/* Forward declaration for use inside agent_response_ctx */
+struct agent_response_ctx;
+
 /**
  * @brief Response callback — called from the agent thread when a
  *        response is ready.
  *
- * @param response  Null-terminated response string.
- * @param user_data Opaque pointer passed to agent_submit_input().
+ * @param err  0 on success, negative on error.
+ * @param ctx  The response context originally passed to agent_submit_input().
  */
-typedef void (*agent_response_cb)(const char *response, void *user_data);
+typedef void (*agent_response_cb)(int err, struct agent_response_ctx *ctx);
 
-/** @brief Get the agent's system prompt string. */
-const char *agent_get_system_prompt(void);
+/**
+ * @brief Context passed to agent_submit_input() and forwarded to the callback.
+ */
+struct agent_response_ctx {
+	char *output;         /**< Buffer to receive the agent's response. */
+	size_t output_length; /**< Size of @p output in bytes. */
+	agent_response_cb cb; /**< Called when the response is ready. */
+	void *user_data;      /**< Opaque caller data. */
+};
 
 /**
  * @brief Initialise the agent (call after memory, tools, skills init).
@@ -59,32 +79,19 @@ int agent_init(void);
  * @brief Submit a user message for processing.
  *
  * Thread-safe. The agent processes the message asynchronously and calls
- * @p cb when the response is ready.
+ * @p ctx->cb when the response is ready.
  *
- * @param input    User input string.
- * @param cb       Response callback function.
- * @param user_data Passed through to callback.
+ * @param input  User input string.
+ * @param ctx    Response context (output buffer, cb, user_data). Must remain
+ *               valid until the callback is invoked.
  * @return 0 on success, -EBUSY if agent is already processing, -EINVAL on bad input.
  */
-int agent_submit_input(const char *input, agent_response_cb cb, void *user_data);
+int agent_submit_input(const char *input, const struct agent_response_ctx *ctx);
 
 /**
  * @brief Check if the agent is currently processing a request.
  */
 bool agent_is_busy(void);
-
-/**
- * @brief Run one complete ReAct cycle synchronously (blocking).
- *
- * Suitable for use from the shell thread when you want a simple
- * blocking call.
- *
- * @param input    User input.
- * @param out_buf  Output buffer for final response.
- * @param out_len  Output buffer size.
- * @return 0 on success, negative on error.
- */
-int agent_run_sync(const char *input, char *out_buf, size_t out_len);
 
 #ifdef __cplusplus
 }
@@ -99,8 +106,7 @@ int agent_run_sync(const char *input, char *out_buf, size_t out_len);
  * collected.  Returning 0 means nothing to summarise (-ENODATA is returned
  * to the original caller).  A negative return is propagated as-is.
  */
-typedef int (*agent_format_fn_t)(const char **roles_out, const char **contents_out,
-				 int max_count);
+typedef int (*agent_format_fn_t)(const char **roles_out, const char **contents_out, int max_count);
 
 /**
  * @brief Request a summary of the conversation context.
@@ -115,4 +121,4 @@ typedef int (*agent_format_fn_t)(const char **roles_out, const char **contents_o
  */
 int agent_request_summary(agent_format_fn_t format_fn, char *out_buf, size_t out_len);
 
-#endif /* ZEPHYRCLAW_AGENT_H */
+#endif /* ZBOT_AGENT_H */
