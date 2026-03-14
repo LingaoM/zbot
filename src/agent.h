@@ -34,8 +34,8 @@ extern "C" {
 /* Maximum ReAct loop iterations before forcing a stop */
 #define AGENT_MAX_REACT_ITERATIONS 10
 
-#define AGENT_INPUT_MAX_LEN    512
-#define AGENT_OUTPUT_MAX_LEN   1024
+#define AGENT_INPUT_MAX_LEN  512
+#define AGENT_OUTPUT_MAX_LEN 1024
 
 /**
  * @brief Response callback — called from the agent thread when a
@@ -46,8 +46,11 @@ extern "C" {
  */
 typedef void (*agent_response_cb)(const char *response, void *user_data);
 
+/** @brief Get the agent's system prompt string. */
+const char *agent_get_system_prompt(void);
+
 /**
- * @brief Initialise the agent (call after soul, memory, tools, skills init).
+ * @brief Initialise the agent (call after memory, tools, skills init).
  * @return 0 on success.
  */
 int agent_init(void);
@@ -63,8 +66,7 @@ int agent_init(void);
  * @param user_data Passed through to callback.
  * @return 0 on success, -EBUSY if agent is already processing, -EINVAL on bad input.
  */
-int agent_submit_input(const char *input, agent_response_cb cb,
-                       void *user_data);
+int agent_submit_input(const char *input, agent_response_cb cb, void *user_data);
 
 /**
  * @brief Check if the agent is currently processing a request.
@@ -89,16 +91,28 @@ int agent_run_sync(const char *input, char *out_buf, size_t out_len);
 #endif
 
 /**
- * @brief Request a summary of the provided conversation context.
+ * @brief Callback provided by the caller to format (collect) the turns to
+ *        be summarised.
  *
- * Used by the memory module (via callback) when the history pool is full.
- * Sends a standalone LLM request and writes the result to out_buf.
- *
- * @param context  String containing the conversation turns to summarise.
- * @param out_buf  Output buffer for the summary text.
- * @param out_len  Output buffer size.
- * @return 0 on success, negative on error.
+ * The callback fills @p roles_out and @p contents_out with pointers to at
+ * most @p max_count turns (oldest first) and returns the actual count
+ * collected.  Returning 0 means nothing to summarise (-ENODATA is returned
+ * to the original caller).  A negative return is propagated as-is.
  */
-int agent_request_summary(const char *context, char *out_buf, size_t out_len);
+typedef int (*agent_format_fn_t)(const char **roles_out, const char **contents_out,
+				 int max_count);
+
+/**
+ * @brief Request a summary of the conversation context.
+ *
+ * Calls @p format_fn to collect the turns, then sends a standalone LLM
+ * request and writes the result to @p out_buf.
+ *
+ * @param format_fn  Callback that fills roles/contents arrays; returns count.
+ * @param out_buf    Output buffer for the summary text.
+ * @param out_len    Output buffer size.
+ * @return 0 on success, -ENODATA if format_fn returned 0, negative on error.
+ */
+int agent_request_summary(agent_format_fn_t format_fn, char *out_buf, size_t out_len);
 
 #endif /* ZEPHYRCLAW_AGENT_H */

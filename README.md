@@ -15,10 +15,10 @@ An open-source embedded AI agent running on the **Nordic nRF7002-DK** developmen
 │                    ZephyrClaw Agent                   │
 │                                                       │
 │  ┌──────────┐  ┌──────────┐  ┌──────────────────┐   │
-│  │  Soul    │  │  Memory  │  │   LLM Client      │   │
-│  │ identity │  │ K_FIFO   │  │  HTTP → OpenAI    │   │
-│  │ config   │  │ pool+NVS │  │  compatible API   │   │
-│  │ (key RAM)│  │ summary  │  │                   │   │
+│  │  Config  │  │  Memory  │  │   LLM Client      │   │
+│  │ endpoint │  │ K_FIFO   │  │  HTTP → OpenAI    │   │
+│  │ model    │  │ pool+    │  │  compatible API   │   │
+│  │ api key  │  │ settings │  │                   │   │
 │  └──────────┘  └──────────┘  └──────────────────┘   │
 │                                                       │
 │  ┌──────────┐  ┌──────────┐  ┌──────────────────┐   │
@@ -39,8 +39,8 @@ An open-source embedded AI agent running on the **Nordic nRF7002-DK** developmen
 
 | Module | File | Purpose |
 |--------|------|---------|
-| **Soul** | `soul.h/c` | Agent identity, system prompt, LLM endpoint, API key (RAM only) |
-| **Memory** | `memory.h/c` | In-RAM conversation history + NVS-persisted rolling summary |
+| **Config** | `config.h/c` | LLM endpoint, model, API key (RAM) + settings persistence |
+| **Memory** | `memory.h/c` | In-RAM conversation history + settings-persisted rolling summary |
 | **LLM Client** | `llm_client.h/c` | HTTPS POST to OpenAI-compatible Chat Completions API |
 | **Tools** | `tools.h/c` | Atomic hardware actions: GPIO, uptime, heap, board info |
 | **Skills** | `skill.h/c` | Multi-step reusable workflows (blink, SOS, status, clear) |
@@ -109,7 +109,7 @@ The latest Zephyr version is recommended. Once your environment is ready, clone 
 From the Zephyr workspace root:
 
 ```bash
-west build -b nrf7002dk/nrf5340/cpuapp ZephyrClaw
+west build -b nrf7002dk/nrf5340/cpuapp zephyrclaw
 west flash
 ```
 
@@ -137,7 +137,7 @@ The key is held in RAM only and lost on reboot. Use `claw key-save` to persist i
 
 ### 5. (Optional) Configure Endpoint
 
-To use OpenAI directly:
+Default endpoint is `xxx:443`. To use OpenAI directly:
 
 ```
 uart:~$ claw host api.openai.com
@@ -285,7 +285,7 @@ skill_register("my_skill", "Description of what it does", my_skill);
 ## Project Structure
 
 ```
-ZephyrClaw/
+zephyrclaw/
 ├── CMakeLists.txt
 ├── prj.conf                              # Zephyr Kconfig (all targets)
 ├── sysbuild.conf
@@ -293,12 +293,11 @@ ZephyrClaw/
 │   └── nrf7002dk_nrf5340_cpuapp.conf     # Board-specific Kconfig overrides
 └── src/
     ├── main.c          # Boot sequence, WiFi events, banner
-    ├── soul.h/c        # Agent identity & runtime LLM config
-    ├── memory.h/c      # K_FIFO history pool + NVS summary
+    ├── config.h/c      # LLM runtime config + settings persistence
+    ├── memory.h/c      # K_FIFO history pool + settings summary
     ├── llm_client.h/c  # HTTPS Chat Completions client
     ├── tools.h/c       # Hardware tool primitives
     ├── skill.h/c       # Multi-step skill framework
-    ├── agent.h/c       # ReAct reasoning loop
-    ├── config.h/c      # API key NVS persistence helper
+    ├── agent.h/c       # ReAct reasoning loop + system prompt
     └── shell_cmd.c     # `claw` shell command tree
 ```

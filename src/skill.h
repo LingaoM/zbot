@@ -22,10 +22,10 @@
 extern "C" {
 #endif
 
-#define SKILL_NAME_MAX_LEN 32
-#define SKILL_DESC_MAX_LEN 128
+#define SKILL_NAME_MAX_LEN   32
+#define SKILL_DESC_MAX_LEN   128
 #define SKILL_RESULT_MAX_LEN 512
-#define SKILL_MAX_COUNT 16
+#define SKILL_MAX_COUNT      16
 
 /**
  * @brief Skill handler function.
@@ -39,9 +39,9 @@ typedef int (*skill_fn)(const char *arg, char *result, size_t res_len);
 
 /** Skill descriptor */
 struct skill_descriptor {
-    char       name[SKILL_NAME_MAX_LEN];
-    char       description[SKILL_DESC_MAX_LEN];
-    skill_fn   handler;
+	char name[SKILL_NAME_MAX_LEN];
+	char description[SKILL_DESC_MAX_LEN];
+	skill_fn handler;
 };
 
 /**
@@ -58,8 +58,7 @@ int skill_register(const char *name, const char *description, skill_fn fn);
  * @param res_len Buffer size.
  * @return 0 on success, -ENOENT if not found.
  */
-int skill_run(const char *name, const char *arg,
-              char *result, size_t res_len);
+int skill_run(const char *name, const char *arg, char *result, size_t res_len);
 
 /**
  * @brief List all registered skills (prints to serial).

@@ -12,7 +12,6 @@ project(zephyrclaw VERSION 0.1.0)
 
 target_sources(app PRIVATE
     src/main.c
-    src/soul.c
     src/tools.c
     src/memory.c
     src/config.c

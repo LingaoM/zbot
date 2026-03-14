@@ -35,15 +35,14 @@ extern "C" {
  * @param result_len Size of the result buffer.
  * @return 0 on success, negative errno on error.
  */
-typedef int (*tool_handler_fn)(const char *args_json,
-                               char *result, size_t result_len);
+typedef int (*tool_handler_fn)(const char *args_json, char *result, size_t result_len);
 
 /** A single tool descriptor */
 struct tool_descriptor {
-    const char       *name;
-    const char       *description;
-    const char       *parameters_json_schema; /* JSON Schema for args */
-    tool_handler_fn   handler;
+	const char *name;
+	const char *description;
+	const char *parameters_json_schema; /* JSON Schema for args */
+	tool_handler_fn handler;
 };
 
 /**
@@ -71,8 +70,7 @@ int tools_build_json(char *buf, size_t buf_len);
  * @param res_len   Size of result buffer.
  * @return 0 on success, -ENOENT if tool not found, other negative on error.
  */
-int tools_execute(const char *name, const char *args_json,
-                  char *result, size_t res_len);
+int tools_execute(const char *name, const char *args_json, char *result, size_t res_len);
 
 /* ------------------------------------------------------------------ */
 /* Built-in tool handlers (also callable directly)                     */
