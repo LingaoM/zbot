@@ -2,79 +2,10 @@
 
 An open-source embedded AI agent running on the **Nordic nRF7002-DK** development board, powered by **Zephyr RTOS**. ZBot implements a ReAct (Reason + Act) loop that connects to any OpenAI-compatible LLM API over WiFi and can control hardware, maintain conversation memory across reboots, and run multi-step skills.
 
-```
-*** Booting Zephyr OS build v4.3.0-7949-g0f8e72a7c2c0 ***
-Start
-[00:00:00.493,804] <inf> zbot_memory: Loaded summary from settings
-[config] API key loaded from flash.
-[00:00:00.493,927] <inf> zbot_config: Config init. Endpoint: openrouter.ai/api/v1/chat/completions model: minimax/minimax-m2.5
-[config] WiFi credentials found — auto-connecting...
-[00:00:00.494,079] <inf> zbot_skill: Built-in skills registered (4 total)
-[00:00:00.494,079] <inf> zbot_agent: zbot agent initialised (max ReAct iterations: 10)
-
-╔══════════════════════════════════════════════╗
-║        ZBot - Embedded AI Agent              ║
-║   Board: nRF7002-DK  |  RTOS: Zephyr         ║
-║   Version: 0.1.0     |  License: Apache-2.0  ║
-╚══════════════════════════════════════════════╝
-
-Quick start:
-  1. Connect to WiFi (saves credentials for auto-connect):
-       zbot wifi connect <SSID> <password>
-  2. Set API key (saved to flash):
-       zbot key sk-...
-  3. [Optional] Change model/endpoint:
-       zbot model gpt-4o-mini
-       zbot host openrouter.ai
-  4. Chat:
-       zbot chat Hello! What can you do?
-  5. Other commands:
-       zbot status              -- show config + WiFi SSID
-       zbot wifi status         -- show saved WiFi SSID
-       zbot history             -- show conversation
-       zbot summary             -- show NVS summary
-       zbot skill list
-       zbot tools
-
-  [Prior session context loaded from NVS]
-
-[00:00:00.495,666] <inf> wifi_supplicant: wpa_supplicant initialized
-
-[00:00:09.333,984] <inf> zbot_main: WiFi connected!
-
-uart:~$ 
-
-uart:~$ zbot chat 
-Entering interactive chat mode. Type /exit to quit.
-zbot:~$ 
-zbot:~$ Hi, please introduce you self
-Thinking...
-
-zbot: I’m zbot, an embedded AI agent running on a Nordic nRF7002-DK with Zephyr RTOS.
-
-Try:
-- `status`
-- `read led0` / `read button0`
-- `set led0 1` / `set led0 0` (same for `led1`)
-
-zbot:~$ looks great, please turn on led0
-Thinking...
-
-[00:01:01.535,675] <inf> zbot_llm: Tool call: gpio_write({"pin":"led0","value":1})
-[00:01:01.535,736] <inf> zbot_agent: Tool requested: gpio_write({"pin":"led0","value":1})
-[00:01:01.535,827] <inf> zbot_tools: Executing tool: gpio_write args={"pin":"led0","value":1}
-[00:01:01.535,980] <inf> zbot_agent: Tool result: {"pin":"led0","value":1,"status":"ok"}
-
-zbot: led0 set to ON.
-
-zbot:~$ /exit
-Leaving chat mode.
-
-uart:~$ 
-```
+![demo](docs/output.gif)
 
 **Target board:** nRF7002-DK (nRF5340 + nRF7002 WiFi)
-**RTOS:** [Zephyr](https://zephyrproject.org) ≥ 3.6
+**RTOS:** [Zephyr](https://zephyrproject.org) ≥ latest
 **License:** Apache-2.0
 
 ---
@@ -400,8 +331,6 @@ zbot/
 ├── CMakeLists.txt
 ├── prj.conf                              # Zephyr Kconfig (all targets)
 ├── sysbuild.conf
-├── boards/
-│   └── nrf7002dk_nrf5340_cpuapp.conf     # Board-specific Kconfig overrides
 └── src/
     ├── main.c          # Boot sequence, WiFi events, banner
     ├── config.h/c      # LLM runtime config + settings persistence
