@@ -79,13 +79,24 @@ static int summary_messages_cb(char *buf, size_t buf_len, void *args)
 
 	if (ctx->prior != NULL) {
 		n = snprintf(buf + pos, buf_len - pos,
-			     "{\"role\":\"user\",\"content\":\"[Prior summary] %s\"},"
-			     "{\"role\":\"assistant\",\"content\":\"Understood.\"},",
-			     ctx->prior);
-		if (n < 0 || pos + (size_t)n >= buf_len) {
+			     "{\"role\":\"user\",\"content\":\"[Prior summary] ");
+		if (n < 0 || (size_t)n >= buf_len - pos) {
 			return -ENOMEM;
 		}
+		pos += (size_t)n;
 
+		n = zbot_json_escape(ctx->prior, buf + pos, buf_len - pos);
+		if ((size_t)n >= buf_len - pos) {
+			return -ENOMEM;
+		}
+		pos += (size_t)n;
+
+		n = snprintf(buf + pos, buf_len - pos,
+			     "\"},"
+			     "{\"role\":\"assistant\",\"content\":\"Understood.\"},");
+		if (n < 0 || (size_t)n >= buf_len - pos) {
+			return -ENOMEM;
+		}
 		pos += (size_t)n;
 	}
 
@@ -102,12 +113,22 @@ static int summary_messages_cb(char *buf, size_t buf_len, void *args)
 	pos += (size_t)n;
 
 	for (int i = 0; i < ctx->count; i++) {
-		n = snprintf(buf + pos, buf_len - pos, "%s: %s\\n", ctx->roles[i],
-			     ctx->contents[i]);
-		if (n < 0 || pos + (size_t)n >= buf_len) {
+		n = snprintf(buf + pos, buf_len - pos, "%s: ", ctx->roles[i]);
+		if (n < 0 || (size_t)n >= buf_len - pos) {
 			return -ENOMEM;
 		}
+		pos += (size_t)n;
 
+		n = zbot_json_escape(ctx->contents[i], buf + pos, buf_len - pos);
+		if ((size_t)n >= buf_len - pos) {
+			return -ENOMEM;
+		}
+		pos += (size_t)n;
+
+		n = snprintf(buf + pos, buf_len - pos, "\\n");
+		if (n < 0 || (size_t)n >= buf_len - pos) {
+			return -ENOMEM;
+		}
 		pos += (size_t)n;
 	}
 
