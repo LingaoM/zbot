@@ -22,26 +22,17 @@
 
 LOG_MODULE_REGISTER(zbot_agent, LOG_LEVEL_INF);
 
-/* Static buffers (large, stack-allocated per call would overflow) */
-static char g_tool_result[TOOLS_RESULT_MAX_LEN];
-
-/*
- * Transient context for a single tool-call iteration.
- *
- * When the LLM returns finish_reason == tool_call, messages_cb receives
- * a pointer to this struct so it can append two extra messages after the
- * persistent history:
- *
- *   { "role": "assistant", "tool_calls": [ { "id": ..., "function": { ... } } ] }
- *   { "role": "tool",      "tool_call_id": ..., "content": <result> }
- *
- * On a normal (stop) turn the pointer is NULL and messages_cb just calls
- * memory_build_messages_json() as before.
- */
 struct tool_turn_ctx {
 	size_t pos;
-	const struct llm_tool_call *call; /* tool call from the last LLM response */
-	const char *result;               /* JSON result string from tools_execute */
+
+	int call_count;
+
+	const char *content;
+
+	struct {
+		const struct llm_tool_call *call;
+		char results[LLM_MAX_TOOL_CALLS][TOOLS_RESULT_MAX_LEN];
+	} react;
 };
 
 struct summary_ctx {
@@ -209,63 +200,87 @@ static int messages_cb(char *buf, size_t buf_len, void *args)
 
 	/*
 	 * Append the assistant tool_call message:
-	 *   {"role":"assistant","tool_calls":[{"id":"...","type":"function",
-	 *    "function":{"name":"...","arguments":"..."}}]}
-	 *
-	 * arguments is a JSON object — escape directly into buf when embedding
-	 * as a JSON string value.
+	 *   {"role":"assistant","content":"...","tool_calls":[{...}, ...]}
 	 */
-	n = snprintf(buf + pos, buf_len - pos,
-		     ",{\"role\":\"assistant\","
-		     "\"tool_calls\":[{"
-		     "\"id\":\"%s\","
-		     "\"type\":\"function\","
-		     "\"function\":{\"name\":\"%s\",\"arguments\":\"",
-		     tc->call->id, tc->call->name);
+	n = snprintf(buf + pos, buf_len - pos, ",{\"role\":\"assistant\",\"content\":\"");
 	if (n < 0 || (size_t)n >= buf_len - pos) {
 		return -ENOMEM;
 	}
 	pos += (size_t)n;
 
-	n = zbot_json_escape(tc->call->arguments, buf + pos, buf_len - pos);
-	if ((size_t)n >= buf_len - pos) {
+	if (tc->content) {
+		n = zbot_json_escape(tc->content, buf + pos, buf_len - pos);
+		if ((size_t)n >= buf_len - pos) {
+			return -ENOMEM;
+		}
+		pos += (size_t)n;
+	}
+
+	n = snprintf(buf + pos, buf_len - pos, "\",\"tool_calls\":[");
+	if (n < 0 || (size_t)n >= buf_len - pos) {
 		return -ENOMEM;
 	}
 	pos += (size_t)n;
 
-	n = snprintf(buf + pos, buf_len - pos, "\"}}]}");
+	for (int i = 0; i < tc->call_count; i++) {
+		const struct llm_tool_call *call = &tc->react.call[i];
+
+		n = snprintf(buf + pos, buf_len - pos,
+			     "%s{\"id\":\"%s\","
+			     "\"type\":\"function\","
+			     "\"function\":{\"name\":\"%s\",\"arguments\":\"",
+			     i > 0 ? "," : "", call->id, call->name);
+		if (n < 0 || (size_t)n >= buf_len - pos) {
+			return -ENOMEM;
+		}
+		pos += (size_t)n;
+
+		n = zbot_json_escape(call->arguments, buf + pos, buf_len - pos);
+		if ((size_t)n >= buf_len - pos) {
+			return -ENOMEM;
+		}
+		pos += (size_t)n;
+
+		n = snprintf(buf + pos, buf_len - pos, "\"}}");
+		if (n < 0 || (size_t)n >= buf_len - pos) {
+			return -ENOMEM;
+		}
+		pos += (size_t)n;
+	}
+
+	n = snprintf(buf + pos, buf_len - pos, "]}");
 	if (n < 0 || (size_t)n >= buf_len - pos) {
 		return -ENOMEM;
 	}
 	pos += (size_t)n;
 
 	/*
-	 * Append the tool result message:
+	 * Append one tool result message per tool call:
 	 *   {"role":"tool","tool_call_id":"...","content":"..."}
-	 *
-	 * result is also a JSON object — escape directly into buf.
 	 */
-	n = snprintf(buf + pos, buf_len - pos,
-		     ",{\"role\":\"tool\","
-		     "\"tool_call_id\":\"%s\","
-		     "\"content\":\"",
-		     tc->call->id);
-	if (n < 0 || (size_t)n >= buf_len - pos) {
-		return -ENOMEM;
-	}
-	pos += (size_t)n;
+	for (int i = 0; i < tc->call_count; i++) {
+		n = snprintf(buf + pos, buf_len - pos,
+			     ",{\"role\":\"tool\","
+			     "\"tool_call_id\":\"%s\","
+			     "\"content\":\"",
+			     tc->react.call[i].id);
+		if (n < 0 || (size_t)n >= buf_len - pos) {
+			return -ENOMEM;
+		}
+		pos += (size_t)n;
 
-	n = zbot_json_escape(tc->result, buf + pos, buf_len - pos);
-	if ((size_t)n >= buf_len - pos) {
-		return -ENOMEM;
-	}
-	pos += (size_t)n;
+		n = zbot_json_escape(tc->react.results[i], buf + pos, buf_len - pos);
+		if ((size_t)n >= buf_len - pos) {
+			return -ENOMEM;
+		}
+		pos += (size_t)n;
 
-	n = snprintf(buf + pos, buf_len - pos, "\"}");
-	if (n < 0 || (size_t)n >= buf_len - pos) {
-		return -ENOMEM;
+		n = snprintf(buf + pos, buf_len - pos, "\"}");
+		if (n < 0 || (size_t)n >= buf_len - pos) {
+			return -ENOMEM;
+		}
+		pos += (size_t)n;
 	}
-	pos += (size_t)n;
 
 	/* Re-add closing ']' */
 	n = snprintf(buf + pos, buf_len - pos, "]");
@@ -316,19 +331,26 @@ static int react_loop(const char *user_input, char *out_buf, size_t out_len)
 		}
 
 		/* --- Tool call branch --- */
-		if (resp.finish_reason == LLM_FINISH_TOOL_CALL && resp.has_tool_call) {
-			LOG_INF("Tool requested: %s(%s)", resp.tool_call.name,
-				resp.tool_call.arguments);
+		if (resp.finish_reason == LLM_FINISH_TOOL_CALL && resp.tool_call_count > 0) {
+			if (resp.content[0] != '\0') {
+				LOG_INF("assistant: %s", resp.content);
+			}
 
-			/* Execute the tool */
-			rc = tools_execute(resp.tool_call.name, resp.tool_call.arguments,
-					   g_tool_result, sizeof(g_tool_result));
+			tc.call_count = resp.tool_call_count;
 
-			LOG_INF("Tool result: %s", g_tool_result);
+			/* Copy calls and execute each tool */
+			for (int i = 0; i < resp.tool_call_count; i++) {
+				rc = tools_execute(resp.tool_calls[i].name,
+						   resp.tool_calls[i].arguments,
+						   tc.react.results[i], sizeof(tc.react.results[i]));
+				if (rc < 0) {
+					LOG_WRN("tool_call[%d] %s failed: %d", i,
+						resp.tool_calls[i].name, rc);
+				}
+			}
 
-			/* Pass tool context to messages_cb on the next iteration */
-			tc.call = &resp.tool_call;
-			tc.result = g_tool_result;
+			tc.react.call = resp.tool_calls;
+			tc.content = resp.content;
 			continue;
 		}
 
@@ -350,8 +372,9 @@ static int react_loop(const char *user_input, char *out_buf, size_t out_len)
 
 	/* Max iterations reached */
 	LOG_WRN("Max ReAct iterations reached");
-	snprintf(out_buf, out_len, "[Max tool iterations (%d) reached. Last result: %s]",
-		 AGENT_MAX_REACT_ITERATIONS, g_tool_result);
+
+	snprintf(out_buf, out_len, "[Max tool iterations (%d) reached]",
+		 AGENT_MAX_REACT_ITERATIONS);
 
 	return -ELOOP;
 }

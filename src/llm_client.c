@@ -139,7 +139,6 @@ static int parse_llm_response(const char *json, struct llm_response *resp)
 
 	if (strcmp(finish_reason, "tool_calls") == 0 || has_tool_calls_field) {
 		resp->finish_reason = LLM_FINISH_TOOL_CALL;
-		resp->has_tool_call = true;
 	} else if (strcmp(finish_reason, "length") == 0) {
 		resp->finish_reason = LLM_FINISH_LENGTH;
 	} else {
@@ -149,24 +148,61 @@ static int parse_llm_response(const char *json, struct llm_response *resp)
 	/* Extract content */
 	extract_json_str(json, "content", resp->content, LLM_CONTENT_MAX_LEN);
 
-	/* Parse tool_calls if present */
-	if (resp->has_tool_call) {
+	/* Parse tool_calls array if present */
+	if (resp->finish_reason == LLM_FINISH_TOOL_CALL) {
 		tc_pos = strstr(json, "\"tool_calls\"");
 		if (tc_pos) {
-			/* Extract tool call id */
-			extract_json_str(tc_pos, "id", resp->tool_call.id,
-					 sizeof(resp->tool_call.id));
-			/* Extract function name */
-			fn_pos = strstr(tc_pos, "\"function\"");
-			if (fn_pos) {
-				extract_json_str(fn_pos, "name", resp->tool_call.name,
-						 LLM_TOOL_NAME_MAX_LEN);
-				/* Arguments is a JSON string (escaped JSON) */
-				extract_json_str(fn_pos, "arguments", resp->tool_call.arguments,
-						 LLM_TOOL_ARGS_MAX_LEN);
+			/* Skip to the opening '[' of the array */
+			const char *arr = tc_pos + strlen("\"tool_calls\"");
+
+			while (*arr == ' ' || *arr == ':' || *arr == '\t') {
+				arr++;
 			}
-			LOG_INF("Tool call: %s(%s)", resp->tool_call.name,
-				resp->tool_call.arguments);
+			if (*arr == '[') {
+				arr++; /* skip '[' */
+			}
+
+			/* Iterate over each object '{' in the array */
+			while (*arr != '\0' && *arr != ']' &&
+			       resp->tool_call_count < LLM_MAX_TOOL_CALLS) {
+				/* Find next '{' */
+				while (*arr != '\0' && *arr != '{' && *arr != ']') {
+					arr++;
+				}
+				if (*arr != '{') {
+					break;
+				}
+
+				struct llm_tool_call *tc =
+					&resp->tool_calls[resp->tool_call_count];
+
+				extract_json_str(arr, "id", tc->id, sizeof(tc->id));
+
+				fn_pos = strstr(arr, "\"function\"");
+
+				/* Find the closing '}' of this object to limit next search */
+				const char *obj_end = arr + 1;
+				int depth = 1;
+
+				while (*obj_end != '\0' && depth > 0) {
+					if (*obj_end == '{') {
+						depth++;
+					} else if (*obj_end == '}') {
+						depth--;
+					}
+					obj_end++;
+				}
+
+				if (fn_pos && fn_pos < obj_end) {
+					extract_json_str(fn_pos, "name", tc->name,
+							 LLM_TOOL_NAME_MAX_LEN);
+					extract_json_str(fn_pos, "arguments", tc->arguments,
+							 LLM_TOOL_ARGS_MAX_LEN);
+				}
+
+				resp->tool_call_count++;
+				arr = obj_end;
+			}
 		}
 	}
 

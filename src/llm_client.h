@@ -24,18 +24,20 @@ extern "C" {
 #endif
 
 /* Maximum sizes */
-#define LLM_REQUEST_BUF_LEN   4096
+#define LLM_REQUEST_BUF_LEN   8172
 #define LLM_RESPONSE_BUF_LEN  4096
 
-#define LLM_CONTENT_MAX_LEN   2048
+#define LLM_CONTENT_MAX_LEN   512
 #define LLM_TOOL_NAME_MAX_LEN 64
-#define LLM_TOOL_ARGS_MAX_LEN 512
+#define LLM_TOOL_ARGS_MAX_LEN 256
 
 /** finish_reason values */
 #define LLM_FINISH_STOP      0
 #define LLM_FINISH_TOOL_CALL 1
 #define LLM_FINISH_LENGTH    2
 #define LLM_FINISH_ERROR     -1
+
+#define LLM_MAX_TOOL_CALLS   8
 
 /** A parsed tool call from the LLM response */
 struct llm_tool_call {
@@ -50,8 +52,8 @@ struct llm_response {
 	char content[LLM_CONTENT_MAX_LEN];
 
 	/* Tool call (valid when finish_reason == LLM_FINISH_TOOL_CALL) */
-	struct llm_tool_call tool_call;
-	bool has_tool_call;
+	struct llm_tool_call tool_calls[LLM_MAX_TOOL_CALLS];
+	int tool_call_count;
 
 	/* finish_reason: LLM_FINISH_* */
 	int finish_reason;
