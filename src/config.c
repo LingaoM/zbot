@@ -124,6 +124,13 @@ SETTINGS_STATIC_HANDLER_DEFINE(zc_config, "zbot", NULL, zc_config_set, NULL, NUL
 /* Init                                                               */
 /* ------------------------------------------------------------------ */
 
+static void print_ssid_cb(void *cb_arg, const char *ssid, size_t ssid_len)
+{
+	ARG_UNUSED(cb_arg);
+	printk("[config] WiFi credentials found (%.*s) — auto-connecting...\n",
+	       (int)ssid_len, ssid);
+}
+
 void config_init(void)
 {
 	/* settings_subsys_init() and settings_load_subtree("zbot") are called
@@ -141,7 +148,7 @@ void config_init(void)
 
 	/* Auto-connect WiFi if credentials were saved in wifi_credentials */
 	if (!wifi_credentials_is_empty()) {
-		printk("[config] WiFi credentials found — auto-connecting...\n");
+		wifi_credentials_for_each_ssid(print_ssid_cb, NULL);
 		config_wifi_auto_connect();
 	}
 }
@@ -373,6 +380,21 @@ void config_print_status(void)
 /* ------------------------------------------------------------------ */
 /* WiFi helpers (backed by Zephyr wifi_credentials subsystem)         */
 /* ------------------------------------------------------------------ */
+struct wifi_delete_ctx {
+	const char *new_ssid;
+	size_t new_ssid_len;
+};
+
+static void delete_different_ssid_cb(void *cb_arg, const char *ssid, size_t ssid_len)
+{
+	struct wifi_delete_ctx *ctx = cb_arg;
+
+	if (ssid_len != ctx->new_ssid_len ||
+	    memcmp(ssid, ctx->new_ssid, ssid_len) != 0) {
+		LOG_INF("Deleting old WiFi credentials for different SSID");
+		wifi_credentials_delete_by_ssid(ssid, ssid_len);
+	}
+}
 
 int config_wifi_connect(const char *ssid, const char *pass)
 {
@@ -391,6 +413,15 @@ int config_wifi_connect(const char *ssid, const char *pass)
 	}
 
 	sec = (pass && pass[0] != '\0') ? WIFI_SECURITY_TYPE_PSK : WIFI_SECURITY_TYPE_NONE;
+
+	/* If stored credentials exist for a different SSID, delete them first */
+	if (!wifi_credentials_is_empty()) {
+		struct wifi_delete_ctx ctx = {
+			.new_ssid = ssid,
+			.new_ssid_len = strlen(ssid),
+		};
+		wifi_credentials_for_each_ssid(delete_different_ssid_cb, &ctx);
+	}
 
 	/* Persist via wifi_credentials subsystem (settings+NVS backend) */
 	rc = wifi_credentials_set_personal(ssid, strlen(ssid), sec, NULL, 0, pass ? pass : "",
