@@ -155,6 +155,18 @@ uart:~$ zbot model minimax/minimax-m2.5
 uart:~$ zbot tls on 443
 ```
 
+For DeepSeek:
+
+```
+uart:~$ zbot tls_verify off
+uart:~$ zbot host api.deepseek.com
+uart:~$ zbot path /chat/completions
+uart:~$ zbot model deepseek-chat
+uart:~$ zbot tls off
+uart:~$ zbot key sk-...
+uart:~$ zbot chat Hi
+```
+
 For a local model (e.g. Ollama):
 
 ```
