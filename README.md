@@ -138,6 +138,11 @@ Credentials are saved to flash. On the next reboot, the board auto-connects with
 
 ### 4. Set API Key
 
+> **Default Provider (OpenRouter)**
+> You need a OpenRouter API key to use this example.  
+> OpenRouter provides a limited number of free requests per day.
+> Get it from: https://openrouter.ai/settings/keys
+
 ```
 uart:~$ zbot key sk-...
 ```
@@ -146,7 +151,9 @@ The key is saved to NVS flash immediately and restored on every reboot.
 
 ### 5. (Optional) Configure Endpoint
 
-For DeepSeek:
+> **For DeepSeek**
+> You need a DeepSeek API key to use this example.  
+> Get it from: https://platform.deepseek.com/api_keys
 
 ```
 uart:~$ zbot tls_verify off
@@ -157,7 +164,20 @@ uart:~$ zbot key sk-...
 uart:~$ zbot chat Hi
 ```
 
-For a local model (e.g. Ollama):
+> **For Xiaomi MIMO**
+> You need a Xiaomi MIMO API key to use this example.  
+> Get it from: https://platform.xiaomimimo.com/#/console/api-keys
+
+```
+uart:~$ zbot tls_verify off
+uart:~$ zbot host api.xiaomimimo.com
+uart:~$ zbot path /v1/chat/completions
+uart:~$ zbot model mimo-v2-pro
+uart:~$ zbot key sk-...
+uart:~$ zbot chat Hi
+```
+
+> **For a local model (e.g. Ollama)**
 
 ```
 uart:~$ zbot host 192.168.1.100
