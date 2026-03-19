@@ -18,9 +18,6 @@
  *   zbot tls <on|off> [port]          -- Configure TLS
  *   zbot tls_verify <on|off>          -- Enable/disable TLS peer certificate verification
  *   zbot status                       -- Show current config status
- *   zbot wifi connect <ssid> [pass]   -- Connect to WiFi (saves credentials)
- *   zbot wifi disconnect              -- Disconnect from WiFi
- *   zbot wifi status                  -- Show saved SSID and connection state
  *   zbot chat [message]               -- Send a message, or enter interactive chat mode
  *   zbot history                      -- Show conversation history
  *   zbot summary                      -- Show persisted NVS summary
@@ -30,6 +27,11 @@
  *   zbot skill run <name> [arg]       -- Run a skill directly
  *   zbot tools                        -- List all available tools
  *
+ * WiFi commands (only available when CONFIG_WIFI is enabled, e.g. nRF7002-DK):
+ *   zbot wifi connect <ssid> [pass]   -- Connect to WiFi (saves credentials)
+ *   zbot wifi disconnect              -- Disconnect from WiFi
+ *   zbot wifi status                  -- Show saved SSID and connection state
+ *
  * Interactive chat mode (zbot chat with no arguments):
  *   Enters a dedicated prompt "zbot:~$ " where every line of input is sent
  *   directly to the agent.  Type /exit to return to the normal shell.
@@ -38,7 +40,9 @@
 #include <zephyr/kernel.h>
 #include <zephyr/shell/shell.h>
 #include <zephyr/logging/log.h>
+#if defined(CONFIG_WIFI)
 #include <zephyr/net/wifi_credentials.h>
+#endif
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -550,8 +554,10 @@ static int cmd_tools(const struct shell *sh, size_t argc, char **argv)
 
 /* ------------------------------------------------------------------ */
 /* zbot wifi connect / disconnect / status                            */
+/* Only compiled when CONFIG_WIFI is enabled (e.g. nRF7002-DK).       */
 /* ------------------------------------------------------------------ */
 
+#if defined(CONFIG_WIFI)
 static int cmd_wifi_connect(const struct shell *sh, size_t argc, char **argv)
 {
 	const char *pass;
@@ -604,15 +610,16 @@ static int cmd_wifi_status(const struct shell *sh, size_t argc, char **argv)
 	return 0;
 }
 
-SHELL_STATIC_SUBCMD_SET_CREATE(sub_skill,
-	SHELL_CMD(list, NULL, "List all skills", cmd_skill_list),
-	SHELL_CMD_ARG(run, NULL, "Run a skill: run <name> [arg]", cmd_skill_run, 2, 1),
-	SHELL_SUBCMD_SET_END);
-
 SHELL_STATIC_SUBCMD_SET_CREATE(sub_wifi,
 	SHELL_CMD_ARG(connect, NULL, "Connect: wifi connect <ssid> [pass]", cmd_wifi_connect, 2, 1),
 	SHELL_CMD(disconnect, NULL, "Disconnect from current WiFi", cmd_wifi_disconnect),
 	SHELL_CMD(status, NULL, "Show saved WiFi SSID", cmd_wifi_status),
+	SHELL_SUBCMD_SET_END);
+#endif /* CONFIG_WIFI */
+
+SHELL_STATIC_SUBCMD_SET_CREATE(sub_skill,
+	SHELL_CMD(list, NULL, "List all skills", cmd_skill_list),
+	SHELL_CMD_ARG(run, NULL, "Run a skill: run <name> [arg]", cmd_skill_run, 2, 1),
 	SHELL_SUBCMD_SET_END);
 
 SHELL_STATIC_SUBCMD_SET_CREATE(sub_zbot,
@@ -628,7 +635,9 @@ SHELL_STATIC_SUBCMD_SET_CREATE(sub_zbot,
 	SHELL_CMD_ARG(tls_verify, NULL, "TLS peer verify: tls_verify <on|off>", cmd_tls_verify, 2,
 		      0),
 	SHELL_CMD(status, NULL, "Show current configuration", cmd_status),
+#if defined(CONFIG_WIFI)
 	SHELL_CMD(wifi, &sub_wifi, "WiFi commands", NULL),
+#endif
 	SHELL_CMD_ARG(chat, NULL, "Chat: chat [message] (no args = interactive mode)", cmd_chat, 1, 32),
 	SHELL_CMD(history, NULL, "Show conversation history", cmd_history),
 	SHELL_CMD(summary, NULL, "Show NVS persisted summary", cmd_summary),

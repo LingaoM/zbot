@@ -1,10 +1,10 @@
 # ZBot
 
-An open-source embedded AI agent running on the **Nordic nRF7002-DK** development board, powered by **Zephyr RTOS**. ZBot implements a ReAct (Reason + Act) loop that connects to any OpenAI-compatible LLM API over WiFi and can control hardware, maintain conversation memory across reboots, and run multi-step skills.
+An open-source embedded AI agent powered by **Zephyr RTOS**. ZBot implements a ReAct (Reason + Act) loop that connects to any OpenAI-compatible LLM API and can control hardware, maintain conversation memory across reboots, and run multi-step skills.
 
 ![demo](docs/output.gif)
 
-**Target board:** nRF7002-DK (nRF5340 + nRF7002 WiFi)
+**Supported boards:** nRF7002-DK (nRF5340 + nRF7002 WiFi), native_sim (Linux host)
 **RTOS:** [Zephyr](https://zephyrproject.org) ≥ latest
 **License:** Apache-2.0
 
@@ -113,14 +113,23 @@ The latest Zephyr version is recommended. Once your environment is ready, clone 
 
 ### 1. Build & Flash
 
-From the Zephyr workspace root:
+**nRF7002-DK** (physical hardware with WiFi):
 
 ```bash
 west build -b nrf7002dk/nrf5340/cpuapp zbot
 west flash
 ```
 
+**native_sim** (Linux host simulation, no WiFi):
+
+```bash
+west build -b native_sim zbot
+./build/zephyr/zephyr.exe
+```
+
 ### 2. Connect Serial
+
+For nRF7002-DK:
 
 ```bash
 minicom -D /dev/ttyACM0 -b 115200
@@ -128,13 +137,17 @@ minicom -D /dev/ttyACM0 -b 115200
 screen /dev/ttyACM0 115200
 ```
 
-### 3. Connect to WiFi
+For native_sim, the shell is on the terminal where you launched `zephyr.exe`.
+
+### 3. Connect to WiFi (nRF7002-DK only)
 
 ```
 uart:~$ zbot wifi connect <SSID> <password>
 ```
 
 Credentials are saved to flash. On the next reboot, the board auto-connects without any manual command.
+
+> **native_sim:** No WiFi configuration needed — the host OS provides the network stack.
 
 ### 4. Set API Key
 
@@ -248,7 +261,9 @@ All commands are subcommands of `zbot`.
 | `zbot tls_verify <on\|off>` | Enable/disable TLS peer certificate verification (saved to flash) |
 | `zbot status` | Show current config and agent state |
 
-### WiFi
+### WiFi (nRF7002-DK only)
+
+> These commands are only available when `CONFIG_WIFI=y` (e.g. nRF7002-DK). They are omitted on boards without WiFi (e.g. `native_sim`).
 
 | Command | Description |
 |---------|-------------|
@@ -364,15 +379,22 @@ skill_register("my_skill", "Description of what it does", my_skill);
 ```
 zbot/
 ├── CMakeLists.txt
-├── prj.conf                              # Zephyr Kconfig (all targets)
-├── sysbuild.conf
+├── prj.conf                              # Zephyr Kconfig (shared, all boards)
+├── sysbuild.conf                         # Sysbuild stub (board-specific overrides below)
+├── boards/
+│   ├── nrf7002dk_nrf5340_cpuapp.conf     # nRF7002-DK: WiFi, credentials, entropy
+│   └── native_sim.conf                   # native_sim: offloaded sockets, POSIX/libc
+├── sysbuild/
+│   └── nrf7002dk_nrf5340_cpuapp.conf     # nRF7002-DK: SB_CONFIG_WIFI_NRF70=y
 └── src/
-    ├── main.c          # Boot sequence, WiFi events, banner
-    ├── config.h/c      # LLM runtime config + settings persistence
+    ├── main.c          # Boot sequence; WiFi events guarded by #if defined(CONFIG_WIFI)
+    ├── config.h/c      # LLM runtime config + settings persistence;
+    │                   #   WiFi helpers guarded by #if defined(CONFIG_WIFI)
     ├── memory.h/c      # K_FIFO history pool + settings summary
     ├── llm_client.h/c  # HTTPS Chat Completions client
-    ├── tools.h/c       # Hardware tool primitives
+    ├── tools.h/c       # Hardware tool primitives (board-generic via DT_ALIAS)
     ├── skill.h/c       # Multi-step skill framework
-    ├── agent.h/c       # ReAct reasoning loop + system prompt
-    └── shell_cmd.c     # `zbot` shell command tree
+    ├── agent.h/c       # ReAct reasoning loop + system prompt (uses CONFIG_BOARD)
+    └── shell_cmd.c     # `zbot` shell command tree;
+                        #   `zbot wifi` subcommands guarded by #if defined(CONFIG_WIFI)
 ```

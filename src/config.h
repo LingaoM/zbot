@@ -20,7 +20,8 @@
  *   "zbot/port"        : TCP port (uint16_t)
  *
  * Note: "zbot/summary" is managed by memory.c under the same subtree.
- * WiFi credentials are stored by the Zephyr wifi_credentials subsystem.
+ * WiFi credentials are stored by the Zephyr wifi_credentials subsystem
+ * (only available when CONFIG_WIFI is enabled).
  */
 
 #ifndef ZBOT_CONFIG_H
@@ -95,8 +96,11 @@ int config_delete_api_key(void);
 /** @brief Reset all config to defaults and delete all persisted keys from flash. */
 int config_reset(void);
 
+#if defined(CONFIG_WIFI)
 /**
  * @brief Save WiFi credentials via wifi_credentials subsystem and connect.
+ *
+ * Only available when CONFIG_WIFI is enabled (e.g. nRF7002-DK).
  *
  * @param ssid  Network SSID.
  * @param pass  Passphrase, or NULL/empty for open networks.
@@ -114,6 +118,7 @@ int config_wifi_disconnect(void);
  * Called automatically on boot by config_init() if credentials exist.
  */
 void config_wifi_auto_connect(void);
+#endif /* CONFIG_WIFI */
 
 /** @brief Print current config to serial (redacts API key). */
 void config_print_status(void);

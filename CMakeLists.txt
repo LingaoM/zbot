@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # ZBot - An open-source embedded AI Agent for Zephyr RTOS
-# Target: nRF7002-DK (nRF5340 + nRF7002 WiFi)
+# Supported boards: nRF7002-DK (nRF5340 + nRF7002 WiFi), native_sim
 
 cmake_minimum_required(VERSION 3.20.0)
 

@@ -290,7 +290,7 @@ static int resolve_and_connect(const struct llm_config *cfg)
 
 		sock = zsock_socket(AF_INET, SOCK_STREAM, IPPROTO_TLS_1_2);
 		if (sock < 0) {
-			LOG_ERR("TLS socket create failed: errno=%d", errno);
+			LOG_ERR("TLS socket create failed: errno=%d", -errno);
 			zsock_freeaddrinfo(res);
 			return -errno;
 		}
@@ -298,30 +298,33 @@ static int resolve_and_connect(const struct llm_config *cfg)
 		rc = zsock_setsockopt(sock, SOL_TLS, TLS_SEC_TAG_LIST,
 				      sec_tag_list, sizeof(sec_tag_list));
 		if (rc < 0) {
-			LOG_ERR("TLS_SEC_TAG_LIST failed: errno=%d", errno);
-			return errno;
+			LOG_ERR("TLS_SEC_TAG_LIST failed: errno=%d", -errno);
+			zsock_freeaddrinfo(res);
+			return -errno;
 		}
 
 		verify = cfg->tls_verify ? TLS_PEER_VERIFY_REQUIRED : TLS_PEER_VERIFY_NONE;
 		rc = zsock_setsockopt(sock, SOL_TLS, TLS_PEER_VERIFY, &verify, sizeof(verify));
 		if (rc < 0) {
-			LOG_ERR("TLS_PEER_VERIFY failed: errno=%d", errno);
-			return errno;
+			LOG_ERR("TLS_PEER_VERIFY failed: errno=%d", -errno);
+			zsock_freeaddrinfo(res);
+			return -errno;
 		}
 
 		rc = zsock_setsockopt(sock, SOL_TLS, TLS_HOSTNAME,
 				      cfg->endpoint_host,
 				      strlen(cfg->endpoint_host));
 		if (rc < 0) {
-			LOG_ERR("TLS_HOSTNAME failed: errno=%d", errno);
-			return errno;
+			LOG_ERR("TLS_HOSTNAME failed: errno=%d", -errno);
+			zsock_freeaddrinfo(res);
+			return -errno;
 		}
 	} else {
 		sock = zsock_socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 	}
 
 	if (sock < 0) {
-		LOG_ERR("Failed to create socket: %d", errno);
+		LOG_ERR("Failed to create socket: %d", -errno);
 		zsock_freeaddrinfo(res);
 		return -errno;
 	}
@@ -330,7 +333,7 @@ static int resolve_and_connect(const struct llm_config *cfg)
 	zsock_freeaddrinfo(res);
 
 	if (rc < 0) {
-		LOG_ERR("Connect failed: %d", errno);
+		LOG_ERR("Connect failed: %d", -errno);
 		zsock_close(sock);
 		return -errno;
 	}

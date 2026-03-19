@@ -5,9 +5,12 @@
  *
  * ZBot - Main Entry Point
  *
- * WiFi:
+ * WiFi (boards with CONFIG_WIFI, e.g. nRF7002-DK):
  *   Use 'zbot wifi connect <ssid> [pass]' to connect and save credentials.
  *   On next boot, config_init() auto-connects using the saved credentials.
+ *
+ * Without WiFi (e.g. native_sim):
+ *   The network stack is provided by the host OS; no WiFi management needed.
  *
  * API key:
  *   'zbot key <key>'  — set and persist to flash
@@ -16,8 +19,10 @@
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/net/net_if.h>
+#if defined(CONFIG_WIFI)
 #include <zephyr/net/net_event.h>
 #include <zephyr/net/wifi_mgmt.h>
+#endif
 
 #include "config.h"
 #include "memory.h"
@@ -28,6 +33,7 @@
 
 LOG_MODULE_REGISTER(zbot_main, LOG_LEVEL_INF);
 
+#if defined(CONFIG_WIFI)
 #define WIFI_MGMT_EVENTS (NET_EVENT_WIFI_CONNECT_RESULT | NET_EVENT_WIFI_DISCONNECT_RESULT)
 
 static struct net_mgmt_event_callback g_wifi_cb;
@@ -52,29 +58,37 @@ static void wifi_event_handler(struct net_mgmt_event_callback *cb, uint64_t mgmt
 		g_wifi_connected = false;
 	}
 }
+#endif /* CONFIG_WIFI */
 
 static void print_banner(void)
 {
 	printk("\n");
 	printk("╔══════════════════════════════════════════════╗\n");
 	printk("║        ZBot - Embedded AI Agent              ║\n");
-	printk("║   Board: nRF7002-DK  |  RTOS: Zephyr         ║\n");
+	printk("║   Board: %-36s║\n", CONFIG_BOARD "  |  Zephyr RTOS");
 	printk("║   Version: 0.1.0     |  License: Apache-2.0  ║\n");
 	printk("╚══════════════════════════════════════════════╝\n");
 	printk("\n");
 	printk("Quick start:\n");
+#if defined(CONFIG_WIFI)
 	printk("  1. Connect to WiFi (saves credentials for auto-connect):\n");
 	printk("       zbot wifi connect <SSID> <password>\n");
 	printk("  2. Set API key (saved to flash):\n");
 	printk("       zbot key sk-...\n");
-	printk("  3. [Optional] Change model/endpoint:\n");
+#else
+	printk("  1. Set API key (saved to flash):\n");
+	printk("       zbot key sk-...\n");
+#endif
+	printk("  2. [Optional] Change model/endpoint:\n");
 	printk("       zbot model gpt-4o-mini\n");
 	printk("       zbot host openrouter.ai\n");
-	printk("  4. Chat:\n");
+	printk("  3. Chat:\n");
 	printk("       zbot chat Hello! What can you do?\n");
-	printk("  5. Other commands:\n");
-	printk("       zbot status              -- show config + WiFi SSID\n");
+	printk("  4. Other commands:\n");
+	printk("       zbot status              -- show config\n");
+#if defined(CONFIG_WIFI)
 	printk("       zbot wifi status         -- show saved WiFi SSID\n");
+#endif
 	printk("       zbot history             -- show conversation\n");
 	printk("       zbot summary             -- show NVS summary\n");
 	printk("       zbot skill list\n");
@@ -95,11 +109,13 @@ int main(void)
 		LOG_WRN("Memory/NVS init warning: %d (continuing without persistence)", rc);
 	}
 
+#if defined(CONFIG_WIFI)
 	/* Register WiFi event callback */
 	net_mgmt_init_event_callback(&g_wifi_cb, wifi_event_handler, WIFI_MGMT_EVENTS);
 	net_mgmt_add_event_callback(&g_wifi_cb);
+#endif
 
-	/* Config — load API key + WiFi credentials from NVS; auto-connect WiFi */
+	/* Config — load API key + (if WiFi board) credentials from NVS; auto-connect */
 	config_init();
 
 	/* LLM client — register TLS CA certificate once at boot */
@@ -129,9 +145,11 @@ int main(void)
 	while (1) {
 		k_sleep(K_SECONDS(30));
 
+#if defined(CONFIG_WIFI)
 		if (g_wifi_connected) {
 			LOG_DBG("Heartbeat — WiFi up");
 		}
+#endif
 	}
 
 	return 0;

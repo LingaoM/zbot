@@ -21,21 +21,32 @@
 LOG_MODULE_REGISTER(zbot_tools, LOG_LEVEL_INF);
 
 /* ------------------------------------------------------------------ */
-/* GPIO aliases from nRF7002-DK device tree                           */
+/* GPIO aliases from device tree (board-independent via DT_ALIAS)    */
 /* LED0..LED1 and BUTTON0..BUTTON1                                    */
 /* ------------------------------------------------------------------ */
 
+/*
+ * GPIO nodes are guarded by DT_NODE_EXISTS first, then DT_NODE_HAS_STATUS.
+ * DT_ALIAS() expands to DT_INVALID_NODE when the alias is absent, and
+ * GPIO_DT_SPEC_GET on an invalid node produces unresolved __device_dts_ord_*
+ * link symbols even inside a false #if branch on some Zephyr versions.
+ * The DT_NODE_EXISTS guard prevents that.
+ */
 #define LED0_NODE DT_ALIAS(led0)
 #define LED1_NODE DT_ALIAS(led1)
 #define BTN0_NODE DT_ALIAS(sw0)
 
-#if DT_NODE_HAS_STATUS(LED0_NODE, okay)
+#define HAS_LED0 (DT_NODE_EXISTS(LED0_NODE) && DT_NODE_HAS_STATUS(LED0_NODE, okay))
+#define HAS_LED1 (DT_NODE_EXISTS(LED1_NODE) && DT_NODE_HAS_STATUS(LED1_NODE, okay))
+#define HAS_BTN0 (DT_NODE_EXISTS(BTN0_NODE) && DT_NODE_HAS_STATUS(BTN0_NODE, okay))
+
+#if HAS_LED0
 static const struct gpio_dt_spec g_led0 = GPIO_DT_SPEC_GET(LED0_NODE, gpios);
 #endif
-#if DT_NODE_HAS_STATUS(LED1_NODE, okay)
+#if HAS_LED1
 static const struct gpio_dt_spec g_led1 = GPIO_DT_SPEC_GET(LED1_NODE, gpios);
 #endif
-#if DT_NODE_HAS_STATUS(BTN0_NODE, okay)
+#if HAS_BTN0
 static const struct gpio_dt_spec g_btn0 = GPIO_DT_SPEC_GET(BTN0_NODE, gpios);
 #endif
 
@@ -47,17 +58,17 @@ static void ensure_gpio_init(void)
 		return;
 	}
 
-#if DT_NODE_HAS_STATUS(LED0_NODE, okay)
+#if HAS_LED0
 	if (device_is_ready(g_led0.port)) {
 		gpio_pin_configure_dt(&g_led0, GPIO_OUTPUT_INACTIVE);
 	}
 #endif
-#if DT_NODE_HAS_STATUS(LED1_NODE, okay)
+#if HAS_LED1
 	if (device_is_ready(g_led1.port)) {
 		gpio_pin_configure_dt(&g_led1, GPIO_OUTPUT_INACTIVE);
 	}
 #endif
-#if DT_NODE_HAS_STATUS(BTN0_NODE, okay)
+#if HAS_BTN0
 	if (device_is_ready(g_btn0.port)) {
 		gpio_pin_configure_dt(&g_btn0, GPIO_INPUT);
 	}
@@ -148,21 +159,21 @@ int tool_gpio_read(const char *args_json, char *result, size_t res_len)
 
 	json_get_str(args_json, "pin", pin_name, sizeof(pin_name));
 
-#if DT_NODE_HAS_STATUS(BTN0_NODE, okay)
+#if HAS_BTN0
 	if (strcmp(pin_name, "button0") == 0 || strcmp(pin_name, "btn0") == 0) {
 		if (device_is_ready(g_btn0.port)) {
 			val = gpio_pin_get_dt(&g_btn0);
 		}
 	}
 #endif
-#if DT_NODE_HAS_STATUS(LED0_NODE, okay)
+#if HAS_LED0
 	if (strcmp(pin_name, "led0") == 0) {
 		if (device_is_ready(g_led0.port)) {
 			val = gpio_pin_get_dt(&g_led0);
 		}
 	}
 #endif
-#if DT_NODE_HAS_STATUS(LED1_NODE, okay)
+#if HAS_LED1
 	if (strcmp(pin_name, "led1") == 0) {
 		if (device_is_ready(g_led1.port)) {
 			val = gpio_pin_get_dt(&g_led1);
@@ -198,12 +209,12 @@ int tool_gpio_write(const char *args_json, char *result, size_t res_len)
 		return -EINVAL;
 	}
 
-#if DT_NODE_HAS_STATUS(LED0_NODE, okay)
+#if HAS_LED0
 	if (strcmp(pin_name, "led0") == 0 && device_is_ready(g_led0.port)) {
 		rc = gpio_pin_set_dt(&g_led0, value);
 	}
 #endif
-#if DT_NODE_HAS_STATUS(LED1_NODE, okay)
+#if HAS_LED1
 	if (strcmp(pin_name, "led1") == 0 && device_is_ready(g_led1.port)) {
 		rc = gpio_pin_set_dt(&g_led1, value);
 	}
@@ -236,9 +247,7 @@ int tool_get_board_info(const char *args_json, char *result, size_t res_len)
 	ARG_UNUSED(args_json);
 
 	snprintf(result, res_len,
-		 "{\"board\":\"nrf7002dk\","
-		 "\"soc\":\"nRF5340\","
-		 "\"wifi_chip\":\"nRF7002\","
+		 "{\"board\":\"" CONFIG_BOARD "\","
 		 "\"rtos\":\"Zephyr\","
 		 "\"agent\":\"zbot\","
 		 "\"version\":\"0.1.0\"}");

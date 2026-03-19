@@ -1,0 +1,45 @@
+/*
+ * Copyright (c) 2026 Lingao Meng
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * ZBot - native_sim GPIO overlay
+ *
+ * The native_sim base DTS already provides:
+ *   gpio0 (zephyr,gpio-emul) — pin 0 → led0
+ *
+ * This overlay extends gpio0 to 3 pins and adds led1 + sw0 (button0)
+ * so that gpio_read / gpio_write tools work the same as on nRF7002-DK.
+ */
+
+#include <zephyr/dt-bindings/gpio/gpio.h>
+
+/* Extend the emulated GPIO controller to cover the pins we need */
+&gpio0 {
+	ngpios = <3>;
+};
+
+/ {
+	leds {
+		compatible = "gpio-leds";
+
+		led1: led_1 {
+			gpios = <&gpio0 1 GPIO_ACTIVE_HIGH>;
+			label = "Blue LED";
+		};
+	};
+
+	buttons {
+		compatible = "gpio-keys";
+
+		button0: button_0 {
+			gpios = <&gpio0 2 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
+			label = "Button 0";
+		};
+	};
+
+	aliases {
+		led1 = &led1;
+		sw0  = &button0;
+	};
+};

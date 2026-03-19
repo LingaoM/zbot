@@ -10,8 +10,10 @@
 #include <zephyr/logging/log.h>
 #include <zephyr/settings/settings.h>
 #include <zephyr/net/net_if.h>
+#if defined(CONFIG_WIFI)
 #include <zephyr/net/wifi_mgmt.h>
 #include <zephyr/net/wifi_credentials.h>
+#endif
 #include <string.h>
 #include <errno.h>
 
@@ -124,12 +126,14 @@ SETTINGS_STATIC_HANDLER_DEFINE(zc_config, "zbot", NULL, zc_config_set, NULL, NUL
 /* Init                                                               */
 /* ------------------------------------------------------------------ */
 
+#if defined(CONFIG_WIFI)
 static void print_ssid_cb(void *cb_arg, const char *ssid, size_t ssid_len)
 {
 	ARG_UNUSED(cb_arg);
 	printk("[config] WiFi credentials found (%.*s) — auto-connecting...\n",
 	       (int)ssid_len, ssid);
 }
+#endif
 
 void config_init(void)
 {
@@ -146,11 +150,13 @@ void config_init(void)
 	LOG_INF("Config init. Endpoint: %s%s model: %s", g_cfg.endpoint_host,
 		g_cfg.endpoint_path, g_cfg.model);
 
+#if defined(CONFIG_WIFI)
 	/* Auto-connect WiFi if credentials were saved in wifi_credentials */
 	if (!wifi_credentials_is_empty()) {
 		wifi_credentials_for_each_ssid(print_ssid_cb, NULL);
 		config_wifi_auto_connect();
 	}
+#endif
 }
 
 /* ------------------------------------------------------------------ */
@@ -374,12 +380,17 @@ void config_print_status(void)
 	printk("  Max Tok  : %d\n", g_cfg.max_tokens);
 	printk("  Temp     : %d.%02d\n", g_cfg.temperature_x100 / 100,
 	       g_cfg.temperature_x100 % 100);
+#if defined(CONFIG_WIFI)
 	printk("  WiFi cred: %s\n", wifi_credentials_is_empty() ? "(not saved)" : "(saved)");
+#endif
 }
 
 /* ------------------------------------------------------------------ */
 /* WiFi helpers (backed by Zephyr wifi_credentials subsystem)         */
+/* Only compiled when CONFIG_WIFI is enabled (e.g. nRF7002-DK).       */
 /* ------------------------------------------------------------------ */
+#if defined(CONFIG_WIFI)
+
 struct wifi_delete_ctx {
 	const char *new_ssid;
 	size_t new_ssid_len;
@@ -478,3 +489,5 @@ void config_wifi_auto_connect(void)
 {
 	k_work_reschedule(&wifi_connect, K_SECONDS(1));
 }
+
+#endif /* CONFIG_WIFI */
