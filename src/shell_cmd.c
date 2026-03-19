@@ -18,7 +18,6 @@
  *   zbot tls <on|off> [port]          -- Configure TLS
  *   zbot tls_verify <on|off>          -- Enable/disable TLS peer certificate verification
  *   zbot status                       -- Show current config status
- *   zbot chat [message]               -- Send a message, or enter interactive chat mode
  *   zbot history                      -- Show conversation history
  *   zbot summary                      -- Show persisted NVS summary
  *   zbot clear                        -- Clear conversation history
@@ -353,6 +352,19 @@ static const struct shell *g_chat_shell;
 static char g_chat_line[CHAT_LINE_MAX];
 static size_t g_chat_line_pos;
 
+static size_t utf8_char_len(const char *buf, size_t pos)
+{
+	size_t len = 0;
+
+	/* Step back over continuation bytes */
+	while (pos > 0 && len < 4 && ((uint8_t)buf[pos - 1] & 0xC0) == 0x80) {
+		pos--;
+		len++;
+	}
+
+	return len + 1;
+}
+
 static void chat_bypass_handler(const struct shell *sh, uint8_t *data,
 				size_t len, void *args)
 {
@@ -379,13 +391,37 @@ static void chat_bypass_handler(const struct shell *sh, uint8_t *data,
 			shell_fprintf(sh, SHELL_INFO, "zbot:~$ ");
 			g_chat_line_pos = 0;
 		} else if (c == '\b' || c == 0x7f) {
-			/* Backspace: erase previous character if any */
+			/*
+			 * Backspace: remove the previous UTF-8 character.
+			 * Erase as many terminal columns as the character
+			 * occupies bytes (conservative; works for ASCII and
+			 * common CJK wide chars displayed as 2 columns on
+			 * most terminals when byte count == 3).
+			 */
 			if (g_chat_line_pos > 0) {
-				g_chat_line_pos--;
+				size_t char_len =
+					utf8_char_len(g_chat_line, g_chat_line_pos);
+
+				g_chat_line_pos -= char_len;
+
+				if (char_len != 1) {
+					shell_fprintf(sh, SHELL_NORMAL, "\b \b");
+				}
+
 				shell_fprintf(sh, SHELL_NORMAL, "\b \b");
 			}
 		} else if (c >= 0x20 && c < 0x7f) {
-			/* Printable ASCII: echo and store */
+			/* Printable ASCII */
+			if (g_chat_line_pos < CHAT_LINE_MAX - 1) {
+				g_chat_line[g_chat_line_pos++] = (char)c;
+				shell_fprintf(sh, SHELL_NORMAL, "%c", c);
+			}
+		} else if (c >= 0x80) {
+			/*
+			 * UTF-8 multi-byte continuation or leading byte.
+			 * Accumulate the raw bytes; the terminal already
+			 * echoes them correctly once the full sequence is sent.
+			 */
 			if (g_chat_line_pos < CHAT_LINE_MAX - 1) {
 				g_chat_line[g_chat_line_pos++] = (char)c;
 				shell_fprintf(sh, SHELL_NORMAL, "%c", c);
@@ -397,51 +433,19 @@ static void chat_bypass_handler(const struct shell *sh, uint8_t *data,
 
 static int cmd_chat(const struct shell *sh, size_t argc, char **argv)
 {
-	if (argc < 2) {
-		/* No arguments → enter interactive chat mode */
-		if (!config_has_api_key()) {
-			shell_error(sh, "API key not set. Run: zbot key <your-api-key>");
-			return -EACCES;
-		}
-
-		shell_print(sh, "Entering interactive chat mode. Type /exit to quit.");
-		shell_fprintf(sh, SHELL_INFO, "zbot:~$ ");
-
-		g_chat_shell = sh;
-		g_chat_line_pos = 0;
-		shell_set_bypass(sh, chat_bypass_handler, NULL);
-		return 0;
-	}
-
+	/* No arguments → enter interactive chat mode */
 	if (!config_has_api_key()) {
 		shell_error(sh, "API key not set. Run: zbot key <your-api-key>");
 		return -EACCES;
 	}
 
-	/* Concatenate all argv[1..] into a single message */
-	size_t pos = 0;
+	shell_print(sh, "Entering interactive chat mode. Type /exit to quit.");
+	shell_fprintf(sh, SHELL_INFO, "zbot:~$ ");
 
-	for (int i = 1; i < argc && pos < sizeof(g_chat_work.input) - 1; i++) {
-		size_t rem = sizeof(g_chat_work.input) - 1 - pos;
-		size_t len = strlen(argv[i]);
-
-		if (i > 1 && pos < sizeof(g_chat_work.input) - 2) {
-			g_chat_work.input[pos++] = ' ';
-		}
-
-		if (len > rem) {
-			len = rem;
-		}
-
-		memcpy(g_chat_work.input + pos, argv[i], len);
-		pos += len;
-	}
-
-	g_chat_work.input[pos] = '\0';
-
-	shell_print(sh, "You: %s", g_chat_work.input);
-
-	return chat_send(sh, g_chat_work.input);
+	g_chat_shell = sh;
+	g_chat_line_pos = 0;
+	shell_set_bypass(sh, chat_bypass_handler, NULL);
+	return 0;
 }
 
 /* ------------------------------------------------------------------ */
@@ -638,7 +642,7 @@ SHELL_STATIC_SUBCMD_SET_CREATE(sub_zbot,
 #if defined(CONFIG_WIFI)
 	SHELL_CMD(wifi, &sub_wifi, "WiFi commands", NULL),
 #endif
-	SHELL_CMD_ARG(chat, NULL, "Chat: chat [message] (no args = interactive mode)", cmd_chat, 1, 32),
+	SHELL_CMD_ARG(chat, NULL, "Chat: chat", cmd_chat, 1, 0),
 	SHELL_CMD(history, NULL, "Show conversation history", cmd_history),
 	SHELL_CMD(summary, NULL, "Show NVS persisted summary", cmd_summary),
 	SHELL_CMD(clear, NULL, "Clear in-RAM conversation history", cmd_clear),

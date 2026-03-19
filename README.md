@@ -174,7 +174,6 @@ uart:~$ zbot host api.deepseek.com
 uart:~$ zbot path /chat/completions
 uart:~$ zbot model deepseek-chat
 uart:~$ zbot key sk-...
-uart:~$ zbot chat Hi
 ```
 
 > **For Xiaomi MIMO**
@@ -187,7 +186,6 @@ uart:~$ zbot host api.xiaomimimo.com
 uart:~$ zbot path /v1/chat/completions
 uart:~$ zbot model mimo-v2-pro
 uart:~$ zbot key sk-...
-uart:~$ zbot chat Hi
 ```
 
 > **For BigModel**
@@ -200,7 +198,6 @@ uart:~$ zbot host open.bigmodel.cn
 uart:~$ zbot path /api/paas/v4/chat/completions
 uart:~$ zbot model glm-5
 uart:~$ zbot key sk-...
-uart:~$ zbot chat Hi
 ```
 
 > **For a local model (e.g. Ollama)**
@@ -211,16 +208,6 @@ uart:~$ zbot tls off 11434
 ```
 
 ### 6. Chat
-
-One-shot message:
-
-```
-uart:~$ zbot chat Hello! What can you do?
-uart:~$ zbot chat Turn on LED0
-uart:~$ zbot chat What is the board uptime?
-```
-
-Interactive chat mode (no arguments):
 
 ```
 uart:~$ zbot chat
@@ -275,7 +262,6 @@ All commands are subcommands of `zbot`.
 
 | Command | Description |
 |---------|-------------|
-| `zbot chat <message>` | Send a single message to the agent |
 | `zbot chat` | Enter interactive chat mode (`zbot:~$ ` prompt; `/exit` to quit) |
 | `zbot history` | Print in-RAM conversation history |
 | `zbot summary` | Show the NVS-persisted session summary |

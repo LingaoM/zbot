@@ -83,7 +83,7 @@ static void print_banner(void)
 	printk("       zbot model gpt-4o-mini\n");
 	printk("       zbot host openrouter.ai\n");
 	printk("  3. Chat:\n");
-	printk("       zbot chat Hello! What can you do?\n");
+	printk("       Hello! What can you do?\n");
 	printk("  4. Other commands:\n");
 	printk("       zbot status              -- show config\n");
 #if defined(CONFIG_WIFI)
