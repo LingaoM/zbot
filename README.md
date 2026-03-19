@@ -177,6 +177,19 @@ uart:~$ zbot key sk-...
 uart:~$ zbot chat Hi
 ```
 
+> **For BigModel**
+> You need a BigModel API key to use this example.
+> Get it from: https://bigmodel.cn/usercenter/proj-mgmt/apikeys
+
+```
+uart:~$ zbot tls_verify off
+uart:~$ zbot host open.bigmodel.cn
+uart:~$ zbot path /api/paas/v4/chat/completions
+uart:~$ zbot model glm-5
+uart:~$ zbot key sk-...
+uart:~$ zbot chat Hi
+```
+
 > **For a local model (e.g. Ollama)**
 
 ```
