@@ -164,6 +164,18 @@ The key is saved to NVS flash immediately and restored on every reboot.
 
 ### 5. (Optional) Configure Endpoint
 
+> **For OpenAI**
+> You need a OpenAI API key to use this example.  
+> Get it from: https://platform.openai.com/api-keys
+
+```
+uart:~$ zbot tls_verify off
+uart:~$ zbot host api.openai.com
+uart:~$ zbot path /v1/chat/completions
+uart:~$ zbot model gpt-5.2
+uart:~$ zbot key sk-...
+```
+
 > **For DeepSeek**
 > You need a DeepSeek API key to use this example.  
 > Get it from: https://platform.deepseek.com/api_keys
