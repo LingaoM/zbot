@@ -2,7 +2,8 @@
 
 An open-source embedded AI agent powered by **Zephyr RTOS**. ZBot implements a ReAct (Reason + Act) loop that connects to any OpenAI-compatible LLM API and can control hardware, maintain conversation memory across reboots, and run multi-step skills.
 
-![demo](docs/output.gif)
+![demo](docs/telegram.gif)
+![demo](docs/terminal.gif)
 
 **Supported boards:** nRF7002-DK (nRF5340 + nRF7002 WiFi), native_sim (Linux host)
 **RTOS:** [Zephyr](https://zephyrproject.org) ≥ latest
@@ -32,8 +33,13 @@ An open-source embedded AI agent powered by **Zephyr RTOS**. ZBot implements a R
 │  └──────────┘  └──────────┘  └──────────────────┘    │
 │                                                      │
 │  ┌────────────────────────────────────────────────┐  │
-│  │  Shell Commands  (zbot key / chat / skill ...) │  │
+│  │  Shell Commands  (zbot key / chat / skill ...) |  │
 │  └────────────────────────────────────────────────┘  │
+│                                                      │
+│  ┌──────────┐                                        │
+│  │ Telegram │  Long-poll thread → agent → sendMessage│
+│  │   Bot    │                                        │
+│  └──────────┘                                        │
 └──────────────────────────────────────────────────────┘
 ```
 
@@ -47,6 +53,8 @@ An open-source embedded AI agent powered by **Zephyr RTOS**. ZBot implements a R
 | **Tools** | `tools.h/c` | Atomic hardware actions: GPIO, uptime, heap, board info |
 | **Skills** | `skill.h/c` | Multi-step reusable workflows (blink, SOS, status, clear) |
 | **Agent** | `agent.h/c` | ReAct loop: reason → call tool → observe → repeat → summarise |
+| **Telegram** | `telegram.h/c` | Telegram Bot long-poll thread; forwards messages to agent and replies |
+| **JSON Util** | `json_util.h/c` | Shared JSON string extraction (`json_get_str`) and escaping (`json_escape`) |
 | **Shell** | `shell_cmd.c` | All `zbot` shell subcommands |
 
 ### ReAct Loop
@@ -93,6 +101,7 @@ After each compression, the rolling summary is written to NVS and injected as pr
 | `zbot/use_tls` | `uint8_t` | TLS enabled flag |
 | `zbot/tls_verify` | `uint8_t` | TLS peer certificate verification flag (default: on) |
 | `zbot/port` | `uint16_t` | TCP port |
+| `zbot/tg_token` | `char[128]` | Telegram Bot API token |
 | `wifi/...` | — | WiFi credentials managed by Zephyr `wifi_credentials` subsystem |
 
 All configuration fields are persisted to NVS automatically when set.
@@ -219,7 +228,20 @@ uart:~$ zbot host 192.168.1.100
 uart:~$ zbot tls off 11434
 ```
 
-### 6. Chat
+### 6. (Optional) Configure Telegram Bot
+
+> Create a bot via [@BotFather](https://t.me/BotFather) on Telegram to obtain a token.
+
+```
+uart:~$ zbot telegram token 1234567890:AAxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+uart:~$ zbot telegram start
+```
+
+The token is saved to NVS flash. On the next reboot, polling starts automatically if a token is stored.
+
+Send any message to the bot and it will be forwarded to the ZBot agent; the reply is sent back to your Telegram chat.
+
+### 7. Chat
 
 ```
 uart:~$ zbot chat
@@ -279,6 +301,15 @@ All commands are subcommands of `zbot`.
 | `zbot summary` | Show the NVS-persisted session summary |
 | `zbot clear` | Clear RAM history (keeps NVS summary) |
 | `zbot wipe` | Wipe all history and NVS summary |
+
+### Telegram Bot
+
+| Command | Description |
+|---------|-------------|
+| `zbot telegram token <token>` | Set Telegram Bot API token (saved to flash) |
+| `zbot telegram start` | Start long-poll thread |
+| `zbot telegram stop` | Stop long-poll thread |
+| `zbot telegram status` | Show token and polling state |
 
 ### Skills & Tools
 
@@ -366,8 +397,9 @@ skill_register("my_skill", "Description of what it does", my_skill);
 ## Security Notes
 
 - **API key** is saved to NVS flash immediately when set via `zbot key`. Use `zbot key-delete` to remove it. Anyone with physical flash access can read the raw NVS partition.
+- **Telegram token** is saved to NVS flash when set via `zbot telegram token`. Use `zbot config_reset` to wipe it.
 - **WiFi passphrase** is stored in flash as plain text when you use `zbot wifi connect`. Anyone with physical flash access can read it. Acceptable for dev boards; use additional protections in production.
-- **TLS peer verification** is enabled by default (`tls_verify on`). Disable it with `zbot tls_verify off` only for development/debugging against servers with self-signed certificates.
+- **TLS peer verification** is enabled by default (`tls_verify on`). Disable it with `zbot tls_verify off` only for development/debugging against servers with self-signed certificates. Note: the Telegram module always skips peer verification to avoid bundling a CA certificate.
 - **NVS summary** is stored as plain text. Avoid sensitive information in conversations if flash readout is a concern.
 
 ---
@@ -393,6 +425,8 @@ zbot/
     ├── tools.h/c       # Hardware tool primitives (board-generic via DT_ALIAS)
     ├── skill.h/c       # Multi-step skill framework
     ├── agent.h/c       # ReAct reasoning loop + system prompt (uses CONFIG_BOARD)
+    ├── telegram.h/c    # Telegram Bot long-poll thread + sendMessage
+    ├── json_util.h/c   # Shared json_get_str() / json_escape()
     └── shell_cmd.c     # `zbot` shell command tree;
                         #   `zbot wifi` subcommands guarded by #if defined(CONFIG_WIFI)
 ```

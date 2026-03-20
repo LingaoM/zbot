@@ -117,6 +117,15 @@ static int zc_config_set(const char *name, size_t len, settings_read_cb read_cb,
 		return rc < 0 ? rc : 0;
 	}
 
+	if (strcmp(name, "tg_token") == 0) {
+		read_len = MIN(len, sizeof(g_cfg.tg_token) - 1);
+		rc = read_cb(cb_arg, g_cfg.tg_token, read_len);
+		if (rc >= 0) {
+			g_cfg.tg_token[read_len] = '\0';
+		}
+		return rc < 0 ? rc : 0;
+	}
+
 	return -ENOENT;
 }
 
@@ -315,6 +324,37 @@ int config_delete_api_key(void)
 	return settings_delete("zbot/apikey");
 }
 
+int config_set_tg_token(const char *token)
+{
+	int rc;
+
+	if (!token || strlen(token) >= CONFIG_TG_TOKEN_MAX_LEN) {
+		return -EINVAL;
+	}
+
+	strncpy(g_cfg.tg_token, token, sizeof(g_cfg.tg_token) - 1);
+	g_cfg.tg_token[sizeof(g_cfg.tg_token) - 1] = '\0';
+
+	rc = settings_save_one("zbot/tg_token", g_cfg.tg_token, strlen(g_cfg.tg_token) + 1);
+	if (rc < 0) {
+		LOG_ERR("Failed to persist tg_token: %d", rc);
+	}
+
+	return rc;
+}
+
+bool config_has_tg_token(void)
+{
+	return g_cfg.tg_token[0] != '\0';
+}
+
+int config_delete_tg_token(void)
+{
+	memset(g_cfg.tg_token, 0, sizeof(g_cfg.tg_token));
+
+	return settings_delete("zbot/tg_token");
+}
+
 int config_reset(void)
 {
 	static const struct llm_config defaults = {
@@ -327,45 +367,29 @@ int config_reset(void)
 		.endpoint_path = DEFAULT_ENDPOINT_PATH,
 		.model = DEFAULT_MODEL,
 	};
+	static const char * const zbot_keys[] = {
+		"zbot/apikey",
+		"zbot/host",
+		"zbot/path",
+		"zbot/model",
+		"zbot/provider_id",
+		"zbot/use_tls",
+		"zbot/tls_verify",
+		"zbot/port",
+		"zbot/tg_token",
+	};
 	int rc;
-	int ret = 0;
 
 	g_cfg = defaults;
 
-	rc = settings_delete("zbot/apikey");
-	if (rc < 0) {
-		ret = rc;
-	}
-	rc = settings_delete("zbot/host");
-	if (rc < 0) {
-		ret = rc;
-	}
-	rc = settings_delete("zbot/path");
-	if (rc < 0) {
-		ret = rc;
-	}
-	rc = settings_delete("zbot/model");
-	if (rc < 0) {
-		ret = rc;
-	}
-	rc = settings_delete("zbot/provider_id");
-	if (rc < 0) {
-		ret = rc;
-	}
-	rc = settings_delete("zbot/use_tls");
-	if (rc < 0) {
-		ret = rc;
-	}
-	rc = settings_delete("zbot/tls_verify");
-	if (rc < 0) {
-		ret = rc;
-	}
-	rc = settings_delete("zbot/port");
-	if (rc < 0) {
-		ret = rc;
+	for (int i = 0; i < ARRAY_SIZE(zbot_keys); i++) {
+		rc = settings_delete(zbot_keys[i]);
+		if (rc < 0) {
+			return rc;
+		}
 	}
 
-	return ret;
+	return 0;
 }
 
 void config_print_status(void)
@@ -377,6 +401,7 @@ void config_print_status(void)
 	printk("  TLS      : %s\n", g_cfg.use_tls ? "yes" : "no");
 	printk("  TLS Vfy  : %s\n", g_cfg.tls_verify ? "yes" : "no");
 	printk("  API Key  : %s\n", g_cfg.api_key[0] ? "*** (set)" : "(not set)");
+	printk("  TG Token : %s\n", g_cfg.tg_token[0] ? "*** (set)" : "(not set)");
 	printk("  Max Tok  : %d\n", g_cfg.max_tokens);
 	printk("  Temp     : %d.%02d\n", g_cfg.temperature_x100 / 100,
 	       g_cfg.temperature_x100 % 100);

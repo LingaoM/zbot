@@ -30,6 +30,7 @@
 #include "agent.h"
 #include "skill.h"
 #include "tools.h"
+#include "telegram.h"
 
 LOG_MODULE_REGISTER(zbot_main, LOG_LEVEL_INF);
 
@@ -84,7 +85,10 @@ static void print_banner(void)
 	printk("       zbot host openrouter.ai\n");
 	printk("  3. Chat:\n");
 	printk("       Hello! What can you do?\n");
-	printk("  4. Other commands:\n");
+	printk("  4. Telegram bot (optional):\n");
+	printk("       zbot telegram token <BOT_TOKEN>\n");
+	printk("       zbot telegram start\n");
+	printk("  5. Other commands:\n");
 	printk("       zbot status              -- show config\n");
 #if defined(CONFIG_WIFI)
 	printk("       zbot wifi status         -- show saved WiFi SSID\n");
@@ -129,6 +133,14 @@ int main(void)
 	if (rc < 0) {
 		LOG_ERR("Agent init failed: %d", rc);
 		return rc;
+	}
+
+	/* Telegram */
+	if (config_has_tg_token()) {
+		rc = telegram_start();
+		if (rc < 0) {
+			LOG_WRN("Telegram auto-start failed: %d", rc);
+		}
 	}
 
 	/* Print banner */

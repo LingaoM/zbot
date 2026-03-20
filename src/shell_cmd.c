@@ -51,6 +51,7 @@
 #include "agent.h"
 #include "tools.h"
 #include "skill.h"
+#include "telegram.h"
 
 LOG_MODULE_REGISTER(zbot_shell, LOG_LEVEL_INF);
 
@@ -621,6 +622,83 @@ SHELL_STATIC_SUBCMD_SET_CREATE(sub_wifi,
 	SHELL_SUBCMD_SET_END);
 #endif /* CONFIG_WIFI */
 
+/* ------------------------------------------------------------------ */
+/* zbot telegram token / start / stop / status                        */
+/* ------------------------------------------------------------------ */
+
+static int cmd_telegram_token(const struct shell *sh, size_t argc, char **argv)
+{
+	int rc;
+
+	if (argc < 2) {
+		shell_print(sh, "Usage: zbot telegram token <bot-token>");
+		return -EINVAL;
+	}
+
+	rc = config_set_tg_token(argv[1]);
+	if (rc == 0) {
+		shell_print(sh, "Telegram token set and saved to flash.");
+	} else {
+		shell_error(sh, "Failed to set Telegram token: %d", rc);
+	}
+	return rc;
+}
+
+static int cmd_telegram_start(const struct shell *sh, size_t argc, char **argv)
+{
+	int rc;
+
+	ARG_UNUSED(argc);
+	ARG_UNUSED(argv);
+
+	rc = telegram_start();
+	if (rc == 0) {
+		shell_print(sh, "Telegram polling started.");
+	} else if (rc == -EALREADY) {
+		shell_print(sh, "Telegram polling is already running.");
+	} else if (rc == -ENODEV) {
+		shell_error(sh, "Telegram token not set. Use: zbot telegram token <token>");
+	} else {
+		shell_error(sh, "Failed to start Telegram polling: %d", rc);
+	}
+	return rc == -EALREADY ? 0 : rc;
+}
+
+static int cmd_telegram_stop(const struct shell *sh, size_t argc, char **argv)
+{
+	ARG_UNUSED(argc);
+	ARG_UNUSED(argv);
+
+	if (!telegram_is_running()) {
+		shell_print(sh, "Telegram polling is not running.");
+		return 0;
+	}
+
+	telegram_stop();
+	shell_print(sh, "Telegram polling stopped.");
+	return 0;
+}
+
+static int cmd_telegram_status(const struct shell *sh, size_t argc, char **argv)
+{
+	ARG_UNUSED(argc);
+	ARG_UNUSED(argv);
+
+	shell_print(sh, "Telegram token : %s",
+		    config_has_tg_token() ? "*** (set)" : "(not set)");
+	shell_print(sh, "Polling        : %s",
+		    telegram_is_running() ? "running" : "stopped");
+	return 0;
+}
+
+SHELL_STATIC_SUBCMD_SET_CREATE(sub_telegram,
+	SHELL_CMD_ARG(token, NULL, "Set Telegram bot token: token <token>",
+		      cmd_telegram_token, 2, 0),
+	SHELL_CMD(start, NULL, "Start Telegram polling", cmd_telegram_start),
+	SHELL_CMD(stop, NULL, "Stop Telegram polling", cmd_telegram_stop),
+	SHELL_CMD(status, NULL, "Show Telegram status", cmd_telegram_status),
+	SHELL_SUBCMD_SET_END);
+
 SHELL_STATIC_SUBCMD_SET_CREATE(sub_skill,
 	SHELL_CMD(list, NULL, "List all skills", cmd_skill_list),
 	SHELL_CMD_ARG(run, NULL, "Run a skill: run <name> [arg]", cmd_skill_run, 2, 1),
@@ -649,6 +727,7 @@ SHELL_STATIC_SUBCMD_SET_CREATE(sub_zbot,
 	SHELL_CMD(wipe, NULL, "Wipe all history and NVS summary", cmd_wipe),
 	SHELL_CMD(skill, &sub_skill, "Skill commands", NULL),
 	SHELL_CMD(tools, NULL, "List available tools", cmd_tools),
+	SHELL_CMD(telegram, &sub_telegram, "Telegram bot commands", NULL),
 	SHELL_SUBCMD_SET_END);
 
 SHELL_CMD_REGISTER(zbot, &sub_zbot, "zbot AI Agent commands", NULL);

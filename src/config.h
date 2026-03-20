@@ -18,6 +18,7 @@
  *   "zbot/use_tls"     : TLS enabled flag (uint8_t)
  *   "zbot/tls_verify"  : TLS peer verification flag (uint8_t)
  *   "zbot/port"        : TCP port (uint16_t)
+ *   "zbot/tg_token"    : Telegram Bot API token
  *
  * Note: "zbot/summary" is managed by memory.c under the same subtree.
  * WiFi credentials are stored by the Zephyr wifi_credentials subsystem
@@ -40,6 +41,7 @@ extern "C" {
 #define CONFIG_ENDPOINT_MAX_LEN    128
 #define CONFIG_MODEL_MAX_LEN       64
 #define CONFIG_PROVIDER_ID_MAX_LEN 64
+#define CONFIG_TG_TOKEN_MAX_LEN    128
 
 /**
  * @brief Runtime LLM configuration — all fields persisted to NVS.
@@ -50,6 +52,7 @@ struct llm_config {
 	char endpoint_path[CONFIG_ENDPOINT_MAX_LEN];
 	char model[CONFIG_MODEL_MAX_LEN];
 	char provider_id[CONFIG_PROVIDER_ID_MAX_LEN];
+	char tg_token[CONFIG_TG_TOKEN_MAX_LEN];
 	bool use_tls;
 	bool tls_verify;
 	uint16_t port;
@@ -86,6 +89,15 @@ int config_set_tls(bool use_tls, uint16_t port);
 
 /** @brief Set TLS peer verification and persist to flash. */
 int config_set_tls_verify(bool tls_verify);
+
+/** @brief Set Telegram Bot token and persist to flash. */
+int config_set_tg_token(const char *token);
+
+/** @brief Check whether a Telegram token is set in RAM. */
+bool config_has_tg_token(void);
+
+/** @brief Delete the Telegram token from RAM and flash. */
+int config_delete_tg_token(void);
 
 /** @brief Check whether an API key is set in RAM. */
 bool config_has_api_key(void);

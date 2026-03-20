@@ -31,6 +31,7 @@
 #include "config.h"
 #include "memory.h"
 #include "agent.h"
+#include "json_util.h"
 
 LOG_MODULE_REGISTER(zbot_memory, LOG_LEVEL_INF);
 
@@ -75,34 +76,6 @@ SETTINGS_STATIC_HANDLER_DEFINE(zbot, "zbot/summary", NULL, zc_settings_set, NULL
 /* ------------------------------------------------------------------ */
 /* ------------------------------------------------------------------ */
 
-int zbot_json_escape(const char *src, char *dst, size_t dst_len)
-{
-	size_t j = 0;
-
-	for (size_t i = 0; src[i] != '\0' && j + 2 < dst_len; i++) {
-		unsigned char c = (unsigned char)src[i];
-
-		if (c == '"') {
-			dst[j++] = '\\';
-			dst[j++] = '"';
-		} else if (c == '\\') {
-			dst[j++] = '\\';
-			dst[j++] = '\\';
-		} else if (c == '\n') {
-			dst[j++] = '\\';
-			dst[j++] = 'n';
-		} else if (c == '\r') {
-			dst[j++] = '\\';
-			dst[j++] = 'r';
-		} else if (c < 0x20) {
-			dst[j++] = ' ';
-		} else {
-			dst[j++] = c;
-		}
-	}
-	dst[j] = '\0';
-	return (int)j;
-}
 
 /*
  * history_format_fn - agent_format_fn_t callback defined in memory.c.
@@ -266,7 +239,7 @@ int memory_build_messages_json(char *buf, size_t buf_len)
 	pos += n;
 
 	/* 1. System message — escape directly into buf */
-	n = zbot_json_escape(AGENT_SYSTEM_PROMPT, buf + pos, buf_len - pos);
+	n = json_escape(AGENT_SYSTEM_PROMPT, buf + pos, buf_len - pos);
 	if ((size_t)n >= buf_len - pos) {
 		return -ENOMEM;
 	}
@@ -291,7 +264,7 @@ int memory_build_messages_json(char *buf, size_t buf_len)
 
 		pos += n;
 
-		n = zbot_json_escape(g_summary, buf + pos, buf_len - pos);
+		n = json_escape(g_summary, buf + pos, buf_len - pos);
 		if ((size_t)n >= buf_len - pos) {
 			return -ENOMEM;
 		}
@@ -318,7 +291,7 @@ int memory_build_messages_json(char *buf, size_t buf_len)
 
 		pos += n;
 
-		n = zbot_json_escape(cur->content, buf + pos, buf_len - pos);
+		n = json_escape(cur->content, buf + pos, buf_len - pos);
 		if ((size_t)n >= buf_len - pos) {
 			return -ENOMEM;
 		}

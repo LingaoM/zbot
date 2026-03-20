@@ -23,6 +23,7 @@
 
 #include "llm_client.h"
 #include "config.h"
+#include "json_util.h"
 
 LOG_MODULE_REGISTER(zbot_llm, LOG_LEVEL_INF);
 
@@ -33,60 +34,6 @@ LOG_MODULE_REGISTER(zbot_llm, LOG_LEVEL_INF);
  * Extract a JSON string value from a buffer.
  * Handles simple cases needed for LLM responses.
  */
-static int extract_json_str(const char *json, const char *key, char *out, size_t out_len)
-{
-	char search[80];
-	const char *pos;
-	size_t i = 0;
-
-	if (!json || !key || !out) {
-		return -EINVAL;
-	}
-
-	snprintf(search, sizeof(search), "\"%s\"", key);
-	pos = strstr(json, search);
-	if (!pos) {
-		return -ENOENT;
-	}
-
-	pos += strlen(search);
-	while (*pos == ' ' || *pos == ':' || *pos == '\t') {
-		pos++;
-	}
-	if (*pos == 'n') { /* null */
-		out[0] = '\0';
-		return 0;
-	}
-	if (*pos != '"') {
-		return -ENOENT;
-	}
-	pos++;
-
-	while (*pos != '\0' && i + 1 < out_len) {
-		if (*pos == '\\') {
-			pos++;
-			if (*pos == 'n') {
-				out[i++] = '\n';
-			} else if (*pos == 't') {
-				out[i++] = '\t';
-			} else if (*pos == '"') {
-				out[i++] = '"';
-			} else if (*pos == '\\') {
-				out[i++] = '\\';
-			} else {
-				out[i++] = *pos;
-			}
-			pos++;
-		} else if (*pos == '"') {
-			break;
-		} else {
-			out[i++] = *pos++;
-		}
-	}
-	out[i] = '\0';
-	return (int)i;
-}
-
 /*
  * Parse the OpenAI chat completion response JSON.
  * Handles both regular text responses and tool_call responses.
@@ -111,7 +58,7 @@ static int parse_llm_response(const char *json, struct llm_response *resp)
 	if (strstr(json, "\"error\"")) {
 		char err_msg[128] = {0};
 
-		extract_json_str(json, "message", err_msg, sizeof(err_msg));
+		json_get_str(json, "message", err_msg, sizeof(err_msg));
 		LOG_ERR("LLM API error: %s", err_msg);
 		return -EIO;
 	}
@@ -119,7 +66,7 @@ static int parse_llm_response(const char *json, struct llm_response *resp)
 	/* Extract finish_reason from choices[0].
 	 * Some providers return finish_reason=null when tool_calls are present,
 	 * so also check for the presence of a "tool_calls" array. */
-	extract_json_str(json, "finish_reason", finish_reason, sizeof(finish_reason));
+	json_get_str(json, "finish_reason", finish_reason, sizeof(finish_reason));
 
 	/* Detect tool_calls: must have the field AND it must not be null/empty.
 	 * "tool_calls\":null" and "tool_calls\":[]" mean no tool call. */
@@ -146,7 +93,7 @@ static int parse_llm_response(const char *json, struct llm_response *resp)
 	}
 
 	/* Extract content */
-	extract_json_str(json, "content", resp->content, LLM_CONTENT_MAX_LEN);
+	json_get_str(json, "content", resp->content, LLM_CONTENT_MAX_LEN);
 
 	/* Parse tool_calls array if present */
 	if (resp->finish_reason == LLM_FINISH_TOOL_CALL) {
@@ -176,7 +123,7 @@ static int parse_llm_response(const char *json, struct llm_response *resp)
 				struct llm_tool_call *tc =
 					&resp->tool_calls[resp->tool_call_count];
 
-				extract_json_str(arr, "id", tc->id, sizeof(tc->id));
+				json_get_str(arr, "id", tc->id, sizeof(tc->id));
 
 				fn_pos = strstr(arr, "\"function\"");
 
@@ -194,9 +141,9 @@ static int parse_llm_response(const char *json, struct llm_response *resp)
 				}
 
 				if (fn_pos && fn_pos < obj_end) {
-					extract_json_str(fn_pos, "name", tc->name,
+					json_get_str(fn_pos, "name", tc->name,
 							 LLM_TOOL_NAME_MAX_LEN);
-					extract_json_str(fn_pos, "arguments", tc->arguments,
+					json_get_str(fn_pos, "arguments", tc->arguments,
 							 LLM_TOOL_ARGS_MAX_LEN);
 				}
 

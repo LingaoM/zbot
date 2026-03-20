@@ -98,17 +98,6 @@ int memory_wipe_all(void);
  */
 void memory_dump(void);
 
-/**
- * @brief Escape a string for embedding inside a JSON string value.
- *
- * Escapes `"`, `\`, `\n`, `\r`, and control characters.
- *
- * @param src     Input string.
- * @param dst     Output buffer.
- * @param dst_len Output buffer size.
- * @return Number of bytes written (excluding NUL).
- */
-int zbot_json_escape(const char *src, char *dst, size_t dst_len);
 
 #ifdef __cplusplus
 }

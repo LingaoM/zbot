@@ -19,6 +19,8 @@ target_sources(app PRIVATE
     src/agent.c
     src/skill.c
     src/shell_cmd.c
+    src/telegram.c
+    src/json_util.c
 )
 
 target_include_directories(app PRIVATE src)

@@ -19,6 +19,7 @@
 #include "tools.h"
 #include "config.h"
 #include "llm_client.h"
+#include "json_util.h"
 
 LOG_MODULE_REGISTER(zbot_agent, LOG_LEVEL_INF);
 
@@ -76,7 +77,7 @@ static int summary_messages_cb(char *buf, size_t buf_len, void *args)
 		}
 		pos += (size_t)n;
 
-		n = zbot_json_escape(ctx->prior, buf + pos, buf_len - pos);
+		n = json_escape(ctx->prior, buf + pos, buf_len - pos);
 		if ((size_t)n >= buf_len - pos) {
 			return -ENOMEM;
 		}
@@ -110,7 +111,7 @@ static int summary_messages_cb(char *buf, size_t buf_len, void *args)
 		}
 		pos += (size_t)n;
 
-		n = zbot_json_escape(ctx->contents[i], buf + pos, buf_len - pos);
+		n = json_escape(ctx->contents[i], buf + pos, buf_len - pos);
 		if ((size_t)n >= buf_len - pos) {
 			return -ENOMEM;
 		}
@@ -209,7 +210,7 @@ static int messages_cb(char *buf, size_t buf_len, void *args)
 	pos += (size_t)n;
 
 	if (tc->content) {
-		n = zbot_json_escape(tc->content, buf + pos, buf_len - pos);
+		n = json_escape(tc->content, buf + pos, buf_len - pos);
 		if ((size_t)n >= buf_len - pos) {
 			return -ENOMEM;
 		}
@@ -235,7 +236,7 @@ static int messages_cb(char *buf, size_t buf_len, void *args)
 		}
 		pos += (size_t)n;
 
-		n = zbot_json_escape(call->arguments, buf + pos, buf_len - pos);
+		n = json_escape(call->arguments, buf + pos, buf_len - pos);
 		if ((size_t)n >= buf_len - pos) {
 			return -ENOMEM;
 		}
@@ -269,7 +270,7 @@ static int messages_cb(char *buf, size_t buf_len, void *args)
 		}
 		pos += (size_t)n;
 
-		n = zbot_json_escape(tc->react.results[i], buf + pos, buf_len - pos);
+		n = json_escape(tc->react.results[i], buf + pos, buf_len - pos);
 		if ((size_t)n >= buf_len - pos) {
 			return -ENOMEM;
 		}
