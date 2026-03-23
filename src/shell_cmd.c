@@ -542,18 +542,11 @@ static int cmd_skill_run(const struct shell *sh, size_t argc, char **argv)
 
 static int cmd_tools(const struct shell *sh, size_t argc, char **argv)
 {
-	const struct tool_descriptor *tools;
-	int count;
-
+	ARG_UNUSED(sh);
 	ARG_UNUSED(argc);
 	ARG_UNUSED(argv);
 
-	tools = tools_get_all(&count);
-
-	shell_print(sh, "=== zbot Tools (%d) ===", count);
-	for (int i = 0; i < count; i++) {
-		shell_print(sh, "  %-20s %s", tools[i].name, tools[i].description);
-	}
+	tools_list();
 	return 0;
 }
 

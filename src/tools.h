@@ -3,96 +3,92 @@
  *
  * SPDX-License-Identifier: Apache-2.0
  *
- * ZBot - Tools Module
+ * ZBot - Tools Framework
  *
- * Tools are the primitive actions the Agent can invoke. Each tool has:
- *   - name        : snake_case identifier used in LLM function calling
- *   - description : human/LLM-readable description
- *   - parameters  : JSON Schema string describing input parameters
- *   - handler     : C function that executes the tool
+ * The LLM-facing tools are defined in src/tools/<name>/TOOL.c and
+ * self-register at boot via SYS_INIT (PRE_KERNEL_1) into a linked list.
  *
- * The tools JSON schema is injected into the LLM request so the model
- * knows what it can call. Results are returned as JSON strings.
+ * tools_build_json() serialises every registered tool into the OpenAI
+ * function-calling schema sent with each LLM request.
+ *
+ * tools_execute() walks the list and dispatches by name; it is called
+ * from agent.c for every tool_call returned by the LLM.
+ *
+ * Hardware primitives (GPIO, uptime, heap, …) are NOT registered as
+ * LLM tools directly. They are called internally by tool_exec/TOOL.c.
  */
 
 #ifndef ZBOT_TOOLS_H
 #define ZBOT_TOOLS_H
 
 #include <stddef.h>
+#include <zephyr/init.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 #define TOOLS_NAME_MAX_LEN   32
-#define TOOLS_RESULT_MAX_LEN 256
+#define TOOLS_RESULT_MAX_LEN 1024
 
 /**
  * @brief Tool handler function signature.
- *
- * @param args_json  JSON object string with the tool's arguments.
- * @param result     Output buffer for the JSON result string.
- * @param result_len Size of the result buffer.
- * @return 0 on success, negative errno on error.
  */
 typedef int (*tool_handler_fn)(const char *args_json, char *result, size_t result_len);
 
-/** A single tool descriptor */
-struct tool_descriptor {
+/** Tool entry descriptor */
+struct tool_entry {
 	const char *name;
 	const char *description;
-	const char *parameters_json_schema; /* JSON Schema for args */
+	const char *parameters_json_schema;
 	tool_handler_fn handler;
 };
 
-/**
- * @brief Get the array of all registered tools.
- * @param count  Output: number of tools.
- * @return Pointer to the tool descriptor array.
- */
-const struct tool_descriptor *tools_get_all(int *count);
+/** Linked-list node wrapping a tool_entry */
+struct tool_node {
+	struct tool_entry entry;
+	struct tool_node *next;
+};
 
 /**
- * @brief Build the "tools" JSON array for an OpenAI-compatible request.
- *
- * @param buf      Output buffer.
- * @param buf_len  Buffer size.
- * @return Bytes written, or negative on error.
+ * @brief Register a tool node (called automatically by TOOL_DEFINE).
+ */
+void tool_register(struct tool_node *node);
+
+/**
+ * @brief Define an LLM-visible tool and register it at boot (PRE_KERNEL_1).
+ */
+#define TOOL_DEFINE(_var, _name, _desc, _schema, _handler)                    \
+	static struct tool_node _var##_node = {                                \
+		.entry = {                                                     \
+			.name = (_name),                                       \
+			.description = (_desc),                                \
+			.parameters_json_schema = (_schema),                   \
+			.handler = (_handler),                                 \
+		},                                                             \
+		.next = NULL,                                                  \
+	};                                                                     \
+	static int _var##_init(void)                                           \
+	{                                                                      \
+		tool_register(&_var##_node);                                   \
+		return 0;                                                      \
+	}                                                                      \
+	SYS_INIT(_var##_init, PRE_KERNEL_1, CONFIG_KERNEL_INIT_PRIORITY_DEFAULT)
+
+/**
+ * @brief Find a registered tool by name and execute it.
+ */
+int tools_execute(const char *name, const char *args_json, char *result, size_t res_len);
+
+/**
+ * @brief Build the OpenAI-compatible "tools" JSON array for the LLM request.
  */
 int tools_build_json(char *buf, size_t buf_len);
 
 /**
- * @brief Find a tool by name and execute it.
- *
- * @param name      Tool name string.
- * @param args_json JSON arguments string.
- * @param result    Output result buffer.
- * @param res_len   Size of result buffer.
- * @return 0 on success, -ENOENT if tool not found, other negative on error.
+ * @brief Print all registered tools to serial console.
  */
-int tools_execute(const char *name, const char *args_json, char *result, size_t res_len);
-
-/* ------------------------------------------------------------------ */
-/* Built-in tool handlers (also callable directly)                     */
-/* ------------------------------------------------------------------ */
-
-/** Read GPIO pin level */
-int tool_gpio_read(const char *args_json, char *result, size_t res_len);
-
-/** Write GPIO pin level */
-int tool_gpio_write(const char *args_json, char *result, size_t res_len);
-
-/** Get system uptime in milliseconds */
-int tool_get_uptime(const char *args_json, char *result, size_t res_len);
-
-/** Get board information */
-int tool_get_board_info(const char *args_json, char *result, size_t res_len);
-
-/** Get free heap memory */
-int tool_get_heap_info(const char *args_json, char *result, size_t res_len);
-
-/** Echo tool (for testing) */
-int tool_echo(const char *args_json, char *result, size_t res_len);
+void tools_list(void);
 
 #ifdef __cplusplus
 }

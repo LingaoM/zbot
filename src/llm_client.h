@@ -37,7 +37,7 @@ extern "C" {
 #define LLM_FINISH_LENGTH    2
 #define LLM_FINISH_ERROR     -1
 
-#define LLM_MAX_TOOL_CALLS   8
+#define LLM_MAX_TOOL_CALLS   3
 
 /** A parsed tool call from the LLM response */
 struct llm_tool_call {

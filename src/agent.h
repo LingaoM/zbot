@@ -26,6 +26,8 @@
 #define ZBOT_AGENT_H
 
 #include <stddef.h>
+#include <stdio.h>
+#include <errno.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -38,13 +40,8 @@ extern "C" {
 #define AGENT_OUTPUT_MAX_LEN 1024
 
 /* clang-format off */
-#define AGENT_SYSTEM_PROMPT                                                    \
-	"You are zbot, an open-source embedded AI agent running on "           \
-	CONFIG_BOARD " powered by Zephyr RTOS. "                               \
-	"You are concise, helpful, and hardware-aware. "                        \
-	"You can control GPIOs, read sensors, and manage the device. "          \
-	"When using tools, always reason step-by-step before acting. "          \
-	"Keep responses short and suitable for a serial terminal."
+/* System prompt loaded from src/AGENT.md at build time */
+extern const char agent_system_prompt[];
 /* clang-format on */
 
 /* Forward declaration for use inside agent_response_ctx */

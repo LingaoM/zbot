@@ -17,18 +17,35 @@ target_sources(app PRIVATE
     src/config.c
     src/llm_client.c
     src/agent.c
-    src/skill.c
     src/shell_cmd.c
     src/telegram.c
     src/json_util.c
+    src/skills/skill.c
 )
 
-target_include_directories(app PRIVATE src)
+target_include_directories(app PRIVATE src src/skills src/tools)
 
 set(gen_dir ${ZEPHYR_BINARY_DIR}/include/generated/)
 
+# OpenRouter TLS certificate
 generate_inc_file_for_target(
     app
     src/certs/openrouter/cert-3.der
     ${gen_dir}/openrouter/https-cert.der.inc
 )
+
+configure_file(
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/AGENT.md.in
+    ${gen_dir}/AGENT.md
+    @ONLY
+)
+
+# Agent system prompt
+generate_inc_file_for_target(
+    app
+    ${gen_dir}/AGENT.md
+    ${gen_dir}/AGENT.md.inc
+)
+
+add_subdirectory(src/tools)
+add_subdirectory(src/skills)

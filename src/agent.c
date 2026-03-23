@@ -23,6 +23,12 @@
 
 LOG_MODULE_REGISTER(zbot_agent, LOG_LEVEL_INF);
 
+/* System prompt embedded from src/AGENT.md at build time */
+const char agent_system_prompt[] = {
+#include "AGENT.md.inc"
+	0x00
+};
+
 struct tool_turn_ctx {
 	size_t pos;
 
@@ -47,6 +53,7 @@ static int summary_messages_cb(char *buf, size_t buf_len, void *args)
 {
 	const struct llm_config *cfg = config_get();
 	struct summary_ctx *ctx = args;
+	const char *prefix;
 	size_t pos = 0;
 	int n;
 
@@ -61,13 +68,28 @@ static int summary_messages_cb(char *buf, size_t buf_len, void *args)
 
 	pos += (size_t)n;
 
-	n = snprintf(buf + pos, buf_len - pos, "[{\"role\":\"system\",\"content\":\"%s\"},",
-		     AGENT_SYSTEM_PROMPT);
+
+	n = snprintf(buf + pos, buf_len - pos, "[{\"role\":\"system\",\"content\":\"");
 	if (n < 0 || (size_t)n >= buf_len - pos) {
 		return -ENOMEM;
 	}
 
-	pos += (size_t)n;
+	pos += n;
+
+	/* 1. System message — escape directly into buf */
+	n = json_escape(agent_system_prompt, buf + pos, buf_len - pos);
+	if ((size_t)n >= buf_len - pos) {
+		return -ENOMEM;
+	}
+
+	pos += n;
+
+	n = snprintf(buf + pos, buf_len - pos, "\"},");
+	if (n < 0 || (size_t)n >= buf_len - pos) {
+		return -ENOMEM;
+	}
+
+	pos += n;
 
 	if (ctx->prior != NULL) {
 		n = snprintf(buf + pos, buf_len - pos,
@@ -92,12 +114,20 @@ static int summary_messages_cb(char *buf, size_t buf_len, void *args)
 		pos += (size_t)n;
 	}
 
-	n = snprintf(buf + pos, buf_len - pos, "{\"role\":\"user\",\"content\":\"%s\\n",
-		     (ctx->prior != NULL)
-			     ? "Update the prior summary to include the following new turns. "
-			       "Keep the result under 3 sentences, factual and concise."
-			     : "Summarise the following conversation in 2-3 sentences "
-			       "for future context. Be factual and concise.");
+	prefix = (ctx->prior != NULL) ?
+		  "Update the prior summary to include the following new turns." :
+		  "Summarise the following conversation.";
+
+	n = snprintf(buf + pos, buf_len - pos, "{\"role\":\"user\",\"content\":\"%s %s",
+		     prefix, "For future context. Be factual and concise.");
+	if (n < 0 || pos + (size_t)n >= buf_len) {
+		return -ENOMEM;
+	}
+
+	pos += (size_t)n;
+
+	n = snprintf(buf + pos, buf_len - pos, "Keep the result not exceed %d bytes.\\n",
+		     MEMORY_SUMMARY_MAX_LEN);
 	if (n < 0 || pos + (size_t)n >= buf_len) {
 		return -ENOMEM;
 	}
@@ -302,8 +332,16 @@ static int tools_cb(char *buf, size_t buf_len, void *args)
 	return tools_build_json(buf, buf_len);
 }
 
-/* ------------------------------------------------------------------ */
-/* ------------------------------------------------------------------ */
+/*
+ * Dispatch an LLM tool_call to the registered handler.
+ * All tools (tool_exec, read_skill, …) are in the linked list —
+ * no hard-coded names here.
+ */
+static int agent_dispatch_tool(const char *name, const char *args_json,
+				char *result, size_t res_len)
+{
+	return tools_execute(name, args_json, result, res_len);
+}
 
 static int react_loop(const char *user_input, char *out_buf, size_t out_len)
 {
@@ -339,14 +377,16 @@ static int react_loop(const char *user_input, char *out_buf, size_t out_len)
 
 			tc.call_count = resp.tool_call_count;
 
-			/* Copy calls and execute each tool */
+			/* Execute each tool call via unified dispatch */
 			for (int i = 0; i < resp.tool_call_count; i++) {
-				rc = tools_execute(resp.tool_calls[i].name,
-						   resp.tool_calls[i].arguments,
-						   tc.react.results[i], sizeof(tc.react.results[i]));
+				const char *tname = resp.tool_calls[i].name;
+				const char *targs = resp.tool_calls[i].arguments;
+
+				rc = agent_dispatch_tool(tname, targs,
+							 tc.react.results[i],
+							 sizeof(tc.react.results[i]));
 				if (rc < 0) {
-					LOG_WRN("tool_call[%d] %s failed: %d", i,
-						resp.tool_calls[i].name, rc);
+					LOG_WRN("tool_call[%d] %s failed: %d", i, tname, rc);
 				}
 			}
 
@@ -379,9 +419,6 @@ static int react_loop(const char *user_input, char *out_buf, size_t out_len)
 
 	return -ELOOP;
 }
-
-/* ------------------------------------------------------------------ */
-/* ------------------------------------------------------------------ */
 
 int agent_init(void)
 {

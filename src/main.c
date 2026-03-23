@@ -28,7 +28,6 @@
 #include "memory.h"
 #include "llm_client.h"
 #include "agent.h"
-#include "skill.h"
 #include "tools.h"
 #include "telegram.h"
 
@@ -124,9 +123,6 @@ int main(void)
 
 	/* LLM client — register TLS CA certificate once at boot */
 	llm_client_init();
-
-	/* Skills */
-	skills_register_builtins();
 
 	/* Agent */
 	rc = agent_init();

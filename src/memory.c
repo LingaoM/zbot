@@ -31,11 +31,48 @@
 #include "config.h"
 #include "memory.h"
 #include "agent.h"
+#include "skill.h"
 #include "json_util.h"
 
 LOG_MODULE_REGISTER(zbot_memory, LOG_LEVEL_INF);
 
 /* ------------------------------------------------------------------ */
+/* skill_foreach callback: json_escape each "- name: desc\n" line     */
+/* directly into the destination JSON buffer.                          */
+/* ------------------------------------------------------------------ */
+
+struct skill_escape_ctx {
+	char *buf;
+	size_t buf_len;
+	size_t pos;
+	bool overflow;
+};
+
+static void skill_escape_cb(const struct skill_entry *entry, void *arg)
+{
+	struct skill_escape_ctx *c = arg;
+	int line_len, written;
+	char line[96];
+
+	if (c->overflow) {
+		return;
+	}
+
+	line_len = snprintf(line, sizeof(line), "- %s: %s\n",
+				entry->name, entry->description);
+	if (line_len <= 0) {
+		return;
+	}
+
+	written = json_escape(line, c->buf + c->pos, c->buf_len - c->pos);
+	if ((size_t)written >= c->buf_len - c->pos) {
+		c->overflow = true;
+		return;
+	}
+
+	c->pos += written;
+}
+
 /* ------------------------------------------------------------------ */
 
 struct memory_node {
@@ -44,18 +81,12 @@ struct memory_node {
 	char content[MEMORY_MSG_MAX_LEN];
 };
 
-/* ------------------------------------------------------------------ */
-/* ------------------------------------------------------------------ */
-
 K_MEM_SLAB_DEFINE(g_node_slab, sizeof(struct memory_node), MEMORY_HISTORY_POOL_SIZE, 4);
 
 static sys_slist_t g_history_list = SYS_SLIST_STATIC_INIT(&g_history_list);
 
 /* Cached summary loaded from settings */
 static char g_summary[MEMORY_SUMMARY_MAX_LEN];
-
-/* ------------------------------------------------------------------ */
-/* ------------------------------------------------------------------ */
 
 static int zc_settings_set(const char *name, size_t len, settings_read_cb read_cb, void *cb_arg)
 {
@@ -72,9 +103,6 @@ static int zc_settings_set(const char *name, size_t len, settings_read_cb read_c
 }
 
 SETTINGS_STATIC_HANDLER_DEFINE(zbot, "zbot/summary", NULL, zc_settings_set, NULL, NULL);
-
-/* ------------------------------------------------------------------ */
-/* ------------------------------------------------------------------ */
 
 
 /*
@@ -139,9 +167,6 @@ static int try_compress(void)
 
 	return 0;
 }
-
-/* ------------------------------------------------------------------ */
-/* ------------------------------------------------------------------ */
 
 int memory_init(void)
 {
@@ -210,6 +235,7 @@ int memory_add_turn(const char *role, const char *content)
 int memory_build_messages_json(char *buf, size_t buf_len)
 {
 	const struct llm_config *cfg = config_get();
+	struct skill_escape_ctx skill_ctx;
 	struct memory_node *cur;
 	size_t pos;
 	int n;
@@ -239,12 +265,34 @@ int memory_build_messages_json(char *buf, size_t buf_len)
 	pos += n;
 
 	/* 1. System message — escape directly into buf */
-	n = json_escape(AGENT_SYSTEM_PROMPT, buf + pos, buf_len - pos);
+	n = json_escape(agent_system_prompt, buf + pos, buf_len - pos);
 	if ((size_t)n >= buf_len - pos) {
 		return -ENOMEM;
 	}
 
 	pos += n;
+
+	/* Append skills list to system message if any skills are registered */
+	if (skill_count() > 0) {
+		n = snprintf(buf + pos, buf_len - pos,
+			     "\\nAvailable skills (use read_skill for docs):\\n");
+		if (n < 0 || (size_t)n >= buf_len - pos) {
+			return -ENOMEM;
+		}
+		pos += n;
+
+		skill_ctx.buf = buf;
+		skill_ctx.buf_len = buf_len;
+		skill_ctx.pos = pos;
+		skill_ctx.overflow = false;
+
+		skill_foreach(skill_escape_cb, &skill_ctx);
+		if (skill_ctx.overflow) {
+			return -ENOMEM;
+		}
+
+		pos = skill_ctx.pos;
+	}
 
 	n = snprintf(buf + pos, buf_len - pos, "\"}");
 	if (n < 0 || (size_t)n >= buf_len - pos) {

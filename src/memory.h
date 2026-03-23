@@ -98,7 +98,6 @@ int memory_wipe_all(void);
  */
 void memory_dump(void);
 
-
 #ifdef __cplusplus
 }
 #endif
