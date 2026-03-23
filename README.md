@@ -430,3 +430,9 @@ zbot/
     └── shell_cmd.c     # `zbot` shell command tree;
                         #   `zbot wifi` subcommands guarded by #if defined(CONFIG_WIFI)
 ```
+
+## ⭐ Star History
+
+⭐ If you like this project, give it a star!
+
+[![Star History Chart](https://api.star-history.com/svg?repos=LingaoM/zbot&type=Date)](https://star-history.com/#LingaoM/zbot&Date)
