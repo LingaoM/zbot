@@ -25,7 +25,7 @@ LOG_MODULE_REGISTER(zbot_agent, LOG_LEVEL_INF);
 
 /* System prompt embedded from src/AGENT.md at build time */
 const char agent_system_prompt[] = {
-#include "AGENT.md.inc"
+#include "AGENTS.md.inc"
 	0x00
 };
 
@@ -202,6 +202,7 @@ int agent_request_summary(agent_format_fn_t format_fn, char *out_buf, size_t out
 static int messages_cb(char *buf, size_t buf_len, void *args)
 {
 	struct tool_turn_ctx *tc = args;
+	bool first = false;
 	size_t pos;
 	int n;
 
@@ -215,8 +216,8 @@ static int messages_cb(char *buf, size_t buf_len, void *args)
 			return n;
 		}
 
+		first = true;
 		tc->pos = (size_t)n;
-		return n;
 	}
 
 	/*
@@ -229,11 +230,8 @@ static int messages_cb(char *buf, size_t buf_len, void *args)
 	}
 	pos--; /* overwrite the trailing ']' */
 
-	/*
-	 * Append the assistant tool_call message:
-	 *   {"role":"assistant","content":"...","tool_calls":[{...}, ...]}
-	 */
-	n = snprintf(buf + pos, buf_len - pos, ",{\"role\":\"assistant\",\"content\":\"");
+	n = snprintf(buf + pos, buf_len - pos, ",{\"role\":\"%s\",\"content\":\"",
+		     first ? "user" : "assistant");
 	if (n < 0 || (size_t)n >= buf_len - pos) {
 		return -ENOMEM;
 	}
@@ -245,6 +243,18 @@ static int messages_cb(char *buf, size_t buf_len, void *args)
 			return -ENOMEM;
 		}
 		pos += (size_t)n;
+	}
+
+	if (first) {
+		n = snprintf(buf + pos, buf_len - pos, "\"}]");
+		if (n < 0 || (size_t)n >= buf_len - pos) {
+			return -ENOMEM;
+		}
+
+		pos += (size_t)n;
+		tc->pos = pos;
+
+		return (int)pos;
 	}
 
 	n = snprintf(buf + pos, buf_len - pos, "\",\"tool_calls\":[");
@@ -345,17 +355,12 @@ static int agent_dispatch_tool(const char *name, const char *args_json,
 
 static int react_loop(const char *user_input, char *out_buf, size_t out_len)
 {
-	struct tool_turn_ctx tc = {0};
+	struct tool_turn_ctx tc = {
+		.content = user_input,
+	};
 	struct llm_response resp;
 	int iterations = 0;
 	int rc;
-
-	/* Add user turn to history */
-	rc = memory_add_turn("user", user_input);
-	if (rc < 0) {
-		LOG_ERR("Failed to add user turn: %d", rc);
-		return rc;
-	}
 
 	while (iterations < AGENT_MAX_REACT_ITERATIONS) {
 		iterations++;
@@ -400,8 +405,20 @@ static int react_loop(const char *user_input, char *out_buf, size_t out_len)
 			strncpy(out_buf, resp.content, out_len - 1);
 			out_buf[out_len - 1] = '\0';
 
+			/* Add user turn to history */
+			rc = memory_add_turn("user", user_input);
+			if (rc < 0) {
+				LOG_ERR("Failed to add user turn: %d", rc);
+				return rc;
+			}
+
 			/* Add assistant response to history */
-			memory_add_turn("assistant", resp.content);
+			rc = memory_add_turn("assistant", resp.content);
+			if (rc < 0) {
+				LOG_ERR("Failed to add user turn: %d", rc);
+				return rc;
+			}
+
 			return 0;
 		}
 

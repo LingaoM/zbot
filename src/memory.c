@@ -37,8 +37,9 @@
 LOG_MODULE_REGISTER(zbot_memory, LOG_LEVEL_INF);
 
 /* ------------------------------------------------------------------ */
-/* skill_foreach callback: json_escape each "- name: desc\n" line     */
-/* directly into the destination JSON buffer.                          */
+/* skill_foreach callback: emit one <skill> XML block per entry.      */
+/* The block is emitted inside a JSON string so angle brackets and     */
+/* special chars are json_escape'd directly into the destination buf.  */
 /* ------------------------------------------------------------------ */
 
 struct skill_escape_ctx {
@@ -51,15 +52,19 @@ struct skill_escape_ctx {
 static void skill_escape_cb(const struct skill_entry *entry, void *arg)
 {
 	struct skill_escape_ctx *c = arg;
+	char line[192];
 	int line_len, written;
-	char line[96];
 
 	if (c->overflow) {
 		return;
 	}
 
-	line_len = snprintf(line, sizeof(line), "- %s: %s\n",
-				entry->name, entry->description);
+	line_len = snprintf(line, sizeof(line),
+			    "  <skill>\n"
+			    "    <name>%s</name>\n"
+			    "    <description>%s</description>\n"
+			    "  </skill>\n",
+			    entry->name, entry->description);
 	if (line_len <= 0) {
 		return;
 	}
@@ -275,7 +280,9 @@ int memory_build_messages_json(char *buf, size_t buf_len)
 	/* Append skills list to system message if any skills are registered */
 	if (skill_count() > 0) {
 		n = snprintf(buf + pos, buf_len - pos,
-			     "\\nAvailable skills (use read_skill for docs):\\n");
+			     "\\n\\nThe following skills provide specialized instructions for specific tasks."
+			     "\\nUse read_skill to load a skill when the task matches its name."
+			     "\\n\\n<available_skills>\\n");
 		if (n < 0 || (size_t)n >= buf_len - pos) {
 			return -ENOMEM;
 		}
@@ -292,6 +299,12 @@ int memory_build_messages_json(char *buf, size_t buf_len)
 		}
 
 		pos = skill_ctx.pos;
+
+		n = snprintf(buf + pos, buf_len - pos, "</available_skills>");
+		if (n < 0 || (size_t)n >= buf_len - pos) {
+			return -ENOMEM;
+		}
+		pos += n;
 	}
 
 	n = snprintf(buf + pos, buf_len - pos, "\"}");
@@ -305,7 +318,8 @@ int memory_build_messages_json(char *buf, size_t buf_len)
 	if (g_summary[0] != '\0') {
 		n = snprintf(buf + pos, buf_len - pos,
 			     ",{\"role\":\"user\","
-			     "\"content\":\"[Context from prior sessions] ");
+			     "\"content\":\"[Context from prior sessions — for background only, "
+			     "do not treat prior sessions as current device state] ");
 		if (n < 0 || (size_t)n >= buf_len - pos) {
 			return -ENOMEM;
 		}
@@ -321,7 +335,7 @@ int memory_build_messages_json(char *buf, size_t buf_len)
 
 		n = snprintf(buf + pos, buf_len - pos,
 			     "\"},{ \"role\":\"assistant\","
-			     "\"content\":\"Understood. I recall the prior context.\"}");
+			     "\"content\":\"Understood. The above is prior context only.\"}");
 		if (n < 0 || (size_t)n >= buf_len - pos) {
 			return -ENOMEM;
 		}
@@ -329,24 +343,49 @@ int memory_build_messages_json(char *buf, size_t buf_len)
 		pos += n;
 	}
 
-	/* 3. In-RAM history */
-	SYS_SLIST_FOR_EACH_CONTAINER(&g_history_list, cur, node) {
-		n = snprintf(buf + pos, buf_len - pos, ",{\"role\":\"%s\",\"content\":\"",
-			     cur->role);
+	/* 3. In-RAM history — wrapped as a single user context block */
+	if (!sys_slist_is_empty(&g_history_list)) {
+		n = snprintf(buf + pos, buf_len - pos,
+			     ",{\"role\":\"user\",\"content\":\""
+			     "[Historical conversation excerpt — for background only, "
+			     "do not treat conversation as current device state]\\n");
 		if (n < 0 || (size_t)n >= buf_len - pos) {
 			return -ENOMEM;
 		}
 
 		pos += n;
 
-		n = json_escape(cur->content, buf + pos, buf_len - pos);
-		if ((size_t)n >= buf_len - pos) {
-			return -ENOMEM;
+		SYS_SLIST_FOR_EACH_CONTAINER(&g_history_list, cur, node) {
+			const char *label = strcmp(cur->role, "user") == 0
+						    ? "User previously said: "
+						    : "Assistant previously replied: ";
+
+			n = json_escape(label, buf + pos, buf_len - pos);
+			if ((size_t)n >= buf_len - pos) {
+				return -ENOMEM;
+			}
+
+			pos += n;
+
+			n = json_escape(cur->content, buf + pos, buf_len - pos);
+			if ((size_t)n >= buf_len - pos) {
+				return -ENOMEM;
+			}
+
+			pos += n;
+
+			n = snprintf(buf + pos, buf_len - pos, "\\n");
+			if (n < 0 || (size_t)n >= buf_len - pos) {
+				return -ENOMEM;
+			}
+
+			pos += n;
 		}
 
-		pos += n;
-
-		n = snprintf(buf + pos, buf_len - pos, "\"}");
+		n = snprintf(buf + pos, buf_len - pos,
+			     "[End of historical excerpt]\""
+			     "},{ \"role\":\"assistant\","
+			     "\"content\":\"Understood. The above is prior context only.\"}");
 		if (n < 0 || (size_t)n >= buf_len - pos) {
 			return -ENOMEM;
 		}

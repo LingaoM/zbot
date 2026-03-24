@@ -437,4 +437,4 @@ zbot/
 
 ⭐ If you like this project, give it a star!
 
-[![Star History Chart](https://api.star-history.com/svg?repos=LingaoM/zbot&type=Date)](https://star-history.com/#LingaoM/zbot&Date)
+[![Star History Chart](https://api.star-history.com/svg?repos=LingaoM/zbot&type=Date&v=1)](https://star-history.com/#LingaoM/zbot&Date)

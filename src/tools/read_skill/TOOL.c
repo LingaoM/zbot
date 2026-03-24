@@ -30,7 +30,7 @@ static int read_skill_handler(const char *args_json, char *result, size_t res_le
 }
 
 TOOL_DEFINE(read_skill, "read_skill",
-	    "Read the full Markdown documentation of a skill before running it.",
+	    "Read the full SKILL.md documentation of a skill before running it.",
 	    "{\"type\":\"object\","
 	    "\"properties\":{"
 	    "\"name\":{\"type\":\"string\","

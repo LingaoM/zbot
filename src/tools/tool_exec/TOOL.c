@@ -86,7 +86,9 @@ static int tool_exec_handler(const char *args_json, char *result, size_t res_len
 }
 
 TOOL_DEFINE(tool_exec, "tool_exec",
-	    "Execute a hardware or system operation using a specific skill.",
+	    "Execute a hardware or system operation using a specific skill."
+	    "Forbidden unless `read_skill` has already been called for that exact skill in this session."
+	    "Always takes a JSON object with exactly this shape:",
 	    "{\"type\":\"object\","
 	    "\"properties\":{"
 	    "\"tool\":{\"type\":\"string\","

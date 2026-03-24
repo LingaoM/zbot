@@ -36,7 +36,7 @@ extern "C" {
 #define MEMORY_COMPRESS_COUNT    6  /* oldest nodes to summarise       */
 
 /* Per-message limits */
-#define MEMORY_MSG_MAX_LEN     512
+#define MEMORY_MSG_MAX_LEN     1024
 #define MEMORY_SUMMARY_MAX_LEN 768
 #define MEMORY_ROLE_MAX_LEN    16
 

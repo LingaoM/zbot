@@ -35,16 +35,16 @@ generate_inc_file_for_target(
 )
 
 configure_file(
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/AGENT.md.in
-    ${gen_dir}/AGENT.md
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/AGENTS.md.in
+    ${gen_dir}/AGENTS.md
     @ONLY
 )
 
 # Agent system prompt
 generate_inc_file_for_target(
     app
-    ${gen_dir}/AGENT.md
-    ${gen_dir}/AGENT.md.inc
+    ${gen_dir}/AGENTS.md
+    ${gen_dir}/AGENTS.md.inc
 )
 
 add_subdirectory(src/tools)
