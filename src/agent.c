@@ -353,7 +353,7 @@ static int agent_dispatch_tool(const char *name, const char *args_json,
 	return tools_execute(name, args_json, result, res_len);
 }
 
-static int react_loop(const char *user_input, char *out_buf, size_t out_len)
+static int react_loop(const char *user_input, agent_response_cb cb, void *user_data)
 {
 	struct tool_turn_ctx tc = {
 		.content = user_input,
@@ -370,14 +370,17 @@ static int react_loop(const char *user_input, char *out_buf, size_t out_len)
 		rc = llm_chat(messages_cb, tools_cb, &resp, &tc);
 		if (rc < 0) {
 			LOG_ERR("LLM call failed: %d", rc);
-			snprintf(out_buf, out_len, "[Error: LLM request failed (%d)]", rc);
+			if (cb) {
+				cb(rc, "[Error: LLM request failed]", false, user_data);
+			}
 			return rc;
 		}
 
 		/* --- Tool call branch --- */
 		if (resp.finish_reason == LLM_FINISH_TOOL_CALL && resp.tool_call_count > 0) {
-			if (resp.content[0] != '\0') {
-				LOG_INF("assistant: %s", resp.content);
+			/* Deliver intermediate content if the model produced any */
+			if (resp.content[0] != '\0' && cb) {
+				cb(0, resp.content, true, user_data);
 			}
 
 			tc.call_count = resp.tool_call_count;
@@ -402,9 +405,6 @@ static int react_loop(const char *user_input, char *out_buf, size_t out_len)
 
 		/* --- Stop / final response --- */
 		if (resp.content[0] != '\0') {
-			strncpy(out_buf, resp.content, out_len - 1);
-			out_buf[out_len - 1] = '\0';
-
 			/* Add user turn to history */
 			rc = memory_add_turn("user", user_input);
 			if (rc < 0) {
@@ -415,8 +415,12 @@ static int react_loop(const char *user_input, char *out_buf, size_t out_len)
 			/* Add assistant response to history */
 			rc = memory_add_turn("assistant", resp.content);
 			if (rc < 0) {
-				LOG_ERR("Failed to add user turn: %d", rc);
+				LOG_ERR("Failed to add assistant turn: %d", rc);
 				return rc;
+			}
+
+			if (cb) {
+				cb(0, resp.content, false, user_data);
 			}
 
 			return 0;
@@ -424,15 +428,20 @@ static int react_loop(const char *user_input, char *out_buf, size_t out_len)
 
 		/* Empty response — stop */
 		LOG_WRN("Empty LLM response");
-		snprintf(out_buf, out_len, "[No response from model]");
+
+		if (cb) {
+			cb(-ENODATA, "[No response from model]", false, user_data);
+		}
+
 		return -ENODATA;
 	}
 
 	/* Max iterations reached */
 	LOG_WRN("Max ReAct iterations reached");
 
-	snprintf(out_buf, out_len, "[Max tool iterations (%d) reached]",
-		 AGENT_MAX_REACT_ITERATIONS);
+	if (cb) {
+		cb(-ELOOP, "[Max tool iterations reached]", false, user_data);
+	}
 
 	return -ELOOP;
 }
@@ -449,7 +458,8 @@ static void agent_work_handler(struct k_work *work);
 static struct agent_work_item {
 	struct k_work work;
 	char input[AGENT_INPUT_MAX_LEN];
-	struct agent_response_ctx ctx;
+	agent_response_cb cb;
+	void *user_data;
 } g_work_item = {
 	.work = Z_WORK_INITIALIZER(agent_work_handler),
 };
@@ -462,18 +472,13 @@ bool agent_is_busy(void)
 static void agent_work_handler(struct k_work *work)
 {
 	struct agent_work_item *item = CONTAINER_OF(work, struct agent_work_item, work);
-	int rc;
 
-	rc = react_loop(item->input, item->ctx.output, item->ctx.output_length);
-
-	if (item->ctx.cb) {
-		item->ctx.cb(rc, &item->ctx);
-	}
+	react_loop(item->input, item->cb, item->user_data);
 }
 
-int agent_submit_input(const char *input, const struct agent_response_ctx *ctx)
+int agent_submit_input(const char *input, agent_response_cb cb, void *user_data)
 {
-	if (!input || strlen(input) == 0 || !ctx || !ctx->output) {
+	if (!input || strlen(input) == 0) {
 		return -EINVAL;
 	}
 
@@ -490,7 +495,8 @@ int agent_submit_input(const char *input, const struct agent_response_ctx *ctx)
 	strncpy(g_work_item.input, input, AGENT_INPUT_MAX_LEN - 1);
 	g_work_item.input[AGENT_INPUT_MAX_LEN - 1] = '\0';
 
-	g_work_item.ctx = *ctx;
+	g_work_item.cb = cb;
+	g_work_item.user_data = user_data;
 
 	k_work_submit(&g_work_item.work);
 

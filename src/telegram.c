@@ -50,7 +50,6 @@ LOG_MODULE_REGISTER(zbot_telegram, LOG_LEVEL_INF);
 #define TG_RX_BUF_LEN  4096
 #define TG_TX_BUF_LEN  2048
 #define TG_MSG_MAX_LEN 512     /* max Telegram message text           */
-#define TG_SEND_MAX_LEN 1024   /* max reply text sent to Telegram     */
 
 /* Telegram polling thread */
 #define TG_STACK_SIZE  8192
@@ -73,6 +72,7 @@ static K_SEM_DEFINE(g_agent_done_sem, 0, 1);
 
 struct tg_agent_work {
 	int rc;
+	int64_t chat_id;
 	char response[AGENT_OUTPUT_MAX_LEN];
 };
 
@@ -260,15 +260,22 @@ static int tg_send_message(int64_t chat_id, const char *text)
 
 	tg_build_path("sendMessage", path, sizeof(path));
 
-	char escaped[TG_SEND_MAX_LEN];
-
-	json_escape(text, escaped, sizeof(escaped));
-
 	n = snprintf(body, sizeof(body),
-		     "{\"chat_id\":%" PRId64 ",\"text\":\"%s\"}", chat_id, escaped);
+		     "{\"chat_id\":%" PRId64 ",\"text\":\"", chat_id);
 	if (n < 0 || (size_t)n >= sizeof(body)) {
 		return -ENOMEM;
 	}
+
+	size_t pos = (size_t)n;
+
+	pos += json_escape(text, body + pos, sizeof(body) - pos);
+	if (pos + 2 >= sizeof(body)) {
+		return -ENOMEM;
+	}
+
+	body[pos++] = '"';
+	body[pos++] = '}';
+	body[pos]   = '\0';
 
 	int rc = tg_post(path, body, rx, sizeof(rx));
 
@@ -288,11 +295,19 @@ static int tg_send_message(int64_t chat_id, const char *text)
 /* Agent response callback                                             */
 /* ------------------------------------------------------------------ */
 
-static void tg_agent_cb(int err, struct agent_response_ctx *ctx)
+static void tg_agent_cb(int err, const char *content, bool is_intermediate,
+			void *user_data)
 {
-	struct tg_agent_work *work = ctx->user_data;
+	struct tg_agent_work *work = user_data;
+
+	if (is_intermediate) {
+		tg_send_message(work->chat_id, content);
+		return;
+	}
 
 	work->rc = err;
+	strncpy(work->response, content, sizeof(work->response) - 1);
+	work->response[sizeof(work->response) - 1] = '\0';
 	k_sem_give(&g_agent_done_sem);
 }
 
@@ -397,16 +412,10 @@ static void tg_poll_loop(void *p1, void *p2, void *p3)
 						chat_id, msg_text);
 
 					/* Submit to agent */
-					struct agent_response_ctx ctx = {
-						.output = g_agent_work.response,
-						.output_length = sizeof(g_agent_work.response),
-						.cb = tg_agent_cb,
-						.user_data = &g_agent_work,
-					};
-
+					g_agent_work.chat_id = chat_id;
 					k_sem_reset(&g_agent_done_sem);
 
-					rc = agent_submit_input(msg_text, &ctx);
+					rc = agent_submit_input(msg_text, tg_agent_cb, &g_agent_work);
 					if (rc == 0) {
 						/* Wait up to 60 s for response */
 						if (k_sem_take(&g_agent_done_sem,

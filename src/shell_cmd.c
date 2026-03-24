@@ -292,23 +292,26 @@ struct chat_work_item {
 
 static struct chat_work_item g_chat_work;
 
-static void agent_rsp_cb(int err, struct agent_response_ctx *ctx)
+static void agent_rsp_cb(int err, const char *content, bool is_intermediate,
+			 void *user_data)
 {
-	struct chat_work_item *chat = ctx->user_data;
+	struct chat_work_item *chat = user_data;
+
+	if (is_intermediate) {
+		/* Intermediate messages are just logged; shell output happens on final */
+		LOG_INF("agent (intermediate): %s", content);
+		return;
+	}
 
 	chat->rc = err;
+	strncpy(chat->response, content, sizeof(chat->response) - 1);
+	chat->response[sizeof(chat->response) - 1] = '\0';
 	k_sem_give(&chat->done);
 }
 
 /* Send one message and print the response.  Returns the agent error code. */
 static int chat_send(const struct shell *sh, const char *msg)
 {
-	struct agent_response_ctx ctx = {
-		.output        = g_chat_work.response,
-		.output_length = sizeof(g_chat_work.response),
-		.cb            = agent_rsp_cb,
-		.user_data     = &g_chat_work,
-	};
 	int rc;
 
 	strncpy(g_chat_work.input, msg, sizeof(g_chat_work.input) - 1);
@@ -318,7 +321,7 @@ static int chat_send(const struct shell *sh, const char *msg)
 
 	k_sem_init(&g_chat_work.done, 0, 1);
 
-	rc = agent_submit_input(g_chat_work.input, &ctx);
+	rc = agent_submit_input(g_chat_work.input, agent_rsp_cb, &g_chat_work);
 	if (rc) {
 		shell_error(sh, "Agent submit input error");
 		return -EACCES;

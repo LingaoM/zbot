@@ -44,27 +44,21 @@ extern "C" {
 extern const char agent_system_prompt[];
 /* clang-format on */
 
-/* Forward declaration for use inside agent_response_ctx */
-struct agent_response_ctx;
-
 /**
- * @brief Response callback — called from the agent thread when a
- *        response is ready.
+ * @brief Response callback — called from the agent thread.
  *
- * @param err  0 on success, negative on error.
- * @param ctx  The response context originally passed to agent_submit_input().
+ * Called once for each intermediate assistant message (during tool-call
+ * iterations where the model produces visible content) and once for the
+ * final response.
+ *
+ * @param err             0 on success, negative on error.
+ * @param content         NUL-terminated response text (never NULL).
+ * @param is_intermediate true if this is a mid-loop assistant message,
+ *                        false for the final response.
+ * @param user_data       Opaque pointer passed to agent_submit_input().
  */
-typedef void (*agent_response_cb)(int err, struct agent_response_ctx *ctx);
-
-/**
- * @brief Context passed to agent_submit_input() and forwarded to the callback.
- */
-struct agent_response_ctx {
-	char *output;         /**< Buffer to receive the agent's response. */
-	size_t output_length; /**< Size of @p output in bytes. */
-	agent_response_cb cb; /**< Called when the response is ready. */
-	void *user_data;      /**< Opaque caller data. */
-};
+typedef void (*agent_response_cb)(int err, const char *content,
+				  bool is_intermediate, void *user_data);
 
 /**
  * @brief Initialise the agent (call after memory, tools, skills init).
@@ -75,15 +69,15 @@ int agent_init(void);
 /**
  * @brief Submit a user message for processing.
  *
- * Thread-safe. The agent processes the message asynchronously and calls
- * @p ctx->cb when the response is ready.
+ * Thread-safe. The agent processes the message asynchronously and invokes
+ * @p cb for each response fragment.
  *
- * @param input  User input string.
- * @param ctx    Response context (output buffer, cb, user_data). Must remain
- *               valid until the callback is invoked.
+ * @param input      User input string.
+ * @param cb         Response callback; may be NULL.
+ * @param user_data  Opaque pointer forwarded to every @p cb invocation.
  * @return 0 on success, -EBUSY if agent is already processing, -EINVAL on bad input.
  */
-int agent_submit_input(const char *input, const struct agent_response_ctx *ctx);
+int agent_submit_input(const char *input, agent_response_cb cb, void *user_data);
 
 /**
  * @brief Check if the agent is currently processing a request.
