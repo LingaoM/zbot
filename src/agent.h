@@ -3,7 +3,7 @@
  *
  * SPDX-License-Identifier: Apache-2.0
  *
- * ZBot - Agent Module
+ * zbot - Agent Module
  *
  * The Agent is the core reasoning loop (ReAct pattern):
  *

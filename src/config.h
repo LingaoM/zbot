@@ -3,7 +3,7 @@
  *
  * SPDX-License-Identifier: Apache-2.0
  *
- * ZBot - Config Module
+ * zbot - Config Module
  *
  * Runtime LLM configuration persisted to NVS via Zephyr settings subsystem.
  * Every config_set_*() call writes through to flash immediately.

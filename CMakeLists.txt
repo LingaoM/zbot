@@ -1,14 +1,14 @@
 # Copyright (c) 2026 Lingao Meng
 # SPDX-License-Identifier: Apache-2.0
 #
-# ZBot - An open-source embedded AI Agent for Zephyr RTOS
+# zbot - An open-source embedded AI Agent for Zephyr RTOS
 # Supported boards: nRF7002-DK (nRF5340 + nRF7002 WiFi), native_sim
 
 cmake_minimum_required(VERSION 3.20.0)
 
 find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
 
-project(ZBot VERSION 0.1.0)
+project(zbot VERSION 0.1.0)
 
 target_sources(app PRIVATE
     src/main.c

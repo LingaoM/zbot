@@ -3,7 +3,7 @@
  *
  * SPDX-License-Identifier: Apache-2.0
  *
- * ZBot - LLM Client Module
+ * zbot - LLM Client Module
  *
  * Sends HTTP POST requests to an OpenAI-compatible Chat Completions API
  * using Zephyr's HTTP client. The API key is taken from config at

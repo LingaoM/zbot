@@ -3,7 +3,7 @@
  *
  * SPDX-License-Identifier: Apache-2.0
  *
- * ZBot - LLM Client Implementation
+ * zbot - LLM Client Implementation
  *
  * Uses Zephyr's BSD-socket API + HTTP client to call OpenAI-compatible APIs.
  * TLS (mbedTLS) is used for HTTPS. The CA certificate bundle must be provided

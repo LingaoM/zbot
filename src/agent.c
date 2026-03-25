@@ -3,7 +3,7 @@
  *
  * SPDX-License-Identifier: Apache-2.0
  *
- * ZBot - Agent Module Implementation
+ * zbot - Agent Module Implementation
  *
  * Implements the ReAct (Reason + Act) loop for tool-augmented LLM interaction.
  */

@@ -3,7 +3,7 @@
  *
  * SPDX-License-Identifier: Apache-2.0
  *
- * ZBot - Telegram Bot Module
+ * zbot - Telegram Bot Module
  *
  * Polls the Telegram Bot API (getUpdates long-polling) and forwards
  * incoming messages to the agent, sending the response back to the chat.

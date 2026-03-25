@@ -3,7 +3,7 @@
  *
  * SPDX-License-Identifier: Apache-2.0
  *
- * ZBot - Skill Framework
+ * zbot - Skill Framework
  *
  * Skills are higher-level, reusable capabilities built on top of Tools.
  * Each skill lives in src/skills/<name>/ and self-registers at boot via

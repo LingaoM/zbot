@@ -3,7 +3,7 @@
  *
  * SPDX-License-Identifier: Apache-2.0
  *
- * ZBot - Shell Commands
+ * zbot - Shell Commands
  *
  * All user-facing commands are under the "zbot" root command.
  *

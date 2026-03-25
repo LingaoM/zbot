@@ -3,7 +3,7 @@
  *
  * SPDX-License-Identifier: Apache-2.0
  *
- * ZBot - Tools Framework
+ * zbot - Tools Framework
  *
  * The LLM-facing tools are defined in src/tools/<name>/TOOL.c and
  * self-register at boot via SYS_INIT (PRE_KERNEL_1) into a linked list.

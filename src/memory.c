@@ -3,7 +3,7 @@
  *
  * SPDX-License-Identifier: Apache-2.0
  *
- * ZBot - Memory Module Implementation
+ * zbot - Memory Module Implementation
  *
  * Persistence uses Zephyr settings subsystem (subtree "zbot"):
  *   "zbot/summary"  : conversation summary (string)
@@ -438,7 +438,7 @@ void memory_dump(void)
 	struct memory_node *node;
 	int i = 0;
 
-	printk("=== ZBot Memory Dump ===\n");
+	printk("=== zbot Memory Dump ===\n");
 	printk("  Summary     : %s\n", g_summary[0] ? g_summary : "(none)");
 	printk("  History:\n");
 

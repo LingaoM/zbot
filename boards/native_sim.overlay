@@ -3,7 +3,7 @@
  *
  * SPDX-License-Identifier: Apache-2.0
  *
- * ZBot - native_sim GPIO overlay
+ * zbot - native_sim GPIO overlay
  *
  * The native_sim base DTS already provides:
  *   gpio0 (zephyr,gpio-emul) — pin 0 → led0

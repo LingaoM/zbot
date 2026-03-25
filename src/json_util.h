@@ -3,7 +3,7 @@
  *
  * SPDX-License-Identifier: Apache-2.0
  *
- * ZBot - JSON utility
+ * zbot - JSON utility
  *
  * Minimal JSON string extraction with full escape sequence support:
  *   \n  \t  \"  \\  \uXXXX  (including UTF-16 surrogate pairs for emoji)

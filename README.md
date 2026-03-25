@@ -1,9 +1,23 @@
-# ZBot
+<h1 align="center">🦞 zbot</h1>
 
-An open-source embedded AI agent powered by **Zephyr RTOS**. ZBot implements a ReAct (Reason + Act) loop that connects to any OpenAI-compatible LLM API and can control hardware, maintain conversation memory across reboots, and run multi-step skills.
+<p align="center">
+  An open-source embedded AI agent powered by Zephyr RTOS<br>
+  zbot implements a ReAct (Reason + Act) loop that connects to any OpenAI-compatible LLM API,
+  enabling hardware control, persistent memory, and multi-step skills.
+</p>
 
-![demo](docs/telegram.gif)
-![demo](docs/terminal.gif)
+<p align="center">
+  <img src="docs/image.png" width="360"/>
+</p>
+
+---
+
+## 🎬 Demo
+
+<p align="center">
+  <img src="docs/telegram.gif"/>
+  <img src="docs/terminal.gif"/>
+</p>
 
 **Supported boards:** nRF7002-DK (nRF5340 + nRF7002 WiFi), native_sim (Linux host)
 **RTOS:** [Zephyr](https://zephyrproject.org) ≥ latest
@@ -15,7 +29,7 @@ An open-source embedded AI agent powered by **Zephyr RTOS**. ZBot implements a R
 
 ```
 ┌──────────────────────────────────────────────────────┐
-│                    ZBot Agent                        │
+│                    zbot Agent                        │
 │                                                      │
 │  ┌──────────┐  ┌──────────┐  ┌──────────────────┐    │
 │  │  Config  │  │  Memory  │  │   LLM Client     │    │
@@ -338,7 +352,7 @@ uart:~$ zbot skill run gpio '{"action":"blink","count":3}'
 
 ---
 
-## Extending ZBot
+## Extending zbot
 
 ### Adding a New Skill
 

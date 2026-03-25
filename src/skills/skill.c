@@ -3,7 +3,7 @@
  *
  * SPDX-License-Identifier: Apache-2.0
  *
- * ZBot - Skill Framework Implementation
+ * zbot - Skill Framework Implementation
  *
  * Skills self-register at boot via SYS_INIT (PRE_KERNEL_1) into a
  * singly-linked list. This file provides the runtime API for iterating

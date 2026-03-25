@@ -3,7 +3,7 @@
  *
  * SPDX-License-Identifier: Apache-2.0
  *
- * ZBot - Config Module Implementation
+ * zbot - Config Module Implementation
  */
 
 #include <zephyr/kernel.h>
@@ -394,7 +394,7 @@ int config_reset(void)
 
 void config_print_status(void)
 {
-	printk("=== ZBot Config ===\n");
+	printk("=== zbot Config ===\n");
 	printk("  Endpoint : %s:%u%s\n", g_cfg.endpoint_host, g_cfg.port, g_cfg.endpoint_path);
 	printk("  Model    : %s\n", g_cfg.model);
 	printk("  Provider : %s\n", g_cfg.provider_id[0] ? g_cfg.provider_id : "(not set)");

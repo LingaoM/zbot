@@ -3,7 +3,7 @@
  *
  * SPDX-License-Identifier: Apache-2.0
  *
- * ZBot - JSON utility implementation
+ * zbot - JSON utility implementation
  */
 
 #include <string.h>

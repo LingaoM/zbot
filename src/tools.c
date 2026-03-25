@@ -3,7 +3,7 @@
  *
  * SPDX-License-Identifier: Apache-2.0
  *
- * ZBot - Tools Framework Implementation
+ * zbot - Tools Framework Implementation
  *
  * LLM-visible tools self-register via TOOL_DEFINE / SYS_INIT (PRE_KERNEL_1)
  * into a singly-linked list. This file only provides the list head and the

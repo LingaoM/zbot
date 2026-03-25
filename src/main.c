@@ -3,7 +3,7 @@
  *
  * SPDX-License-Identifier: Apache-2.0
  *
- * ZBot - Main Entry Point
+ * zbot - Main Entry Point
  *
  * WiFi (boards with CONFIG_WIFI, e.g. nRF7002-DK):
  *   Use 'zbot wifi connect <ssid> [pass]' to connect and save credentials.
@@ -64,7 +64,7 @@ static void print_banner(void)
 {
 	printk("\n");
 	printk("╔══════════════════════════════════════════════╗\n");
-	printk("║        ZBot - Embedded AI Agent              ║\n");
+	printk("║        zbot - Embedded AI Agent              ║\n");
 	printk("║   Board: %-36s║\n", CONFIG_BOARD "  |  Zephyr RTOS");
 	printk("║   Version: 0.1.0     |  License: Apache-2.0  ║\n");
 	printk("╚══════════════════════════════════════════════╝\n");

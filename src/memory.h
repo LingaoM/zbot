@@ -3,7 +3,7 @@
  *
  * SPDX-License-Identifier: Apache-2.0
  *
- * ZBot - Memory Module
+ * zbot - Memory Module
  *
  * Manages conversation history in RAM using a k_mem_slab pool and a
  * sys_slist_t, and persists a rolling summary via Zephyr settings subsystem.
