@@ -7,7 +7,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/image.png" width="360"/>
+  <img src="docs/logo.jpg" width="360"/>
 </p>
 
 ---
@@ -450,5 +450,3 @@ zbot/
 ## ⭐ Star History
 
 ⭐ If you like this project, give it a star!
-
-[![Star History Chart](https://api.star-history.com/svg?repos=LingaoM/zbot&type=Date&v=1)](https://star-history.com/#LingaoM/zbot&Date)
