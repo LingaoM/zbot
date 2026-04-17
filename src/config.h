@@ -16,7 +16,6 @@
  *   "zbot/model"       : model name
  *   "zbot/provider_id" : X-Model-Provider-Id header value
  *   "zbot/use_tls"     : TLS enabled flag (uint8_t)
- *   "zbot/tls_verify"  : TLS peer verification flag (uint8_t)
  *   "zbot/port"        : TCP port (uint16_t)
  *   "zbot/tg_token"    : Telegram Bot API token
  *
@@ -54,7 +53,6 @@ struct llm_config {
 	char provider_id[CONFIG_PROVIDER_ID_MAX_LEN];
 	char tg_token[CONFIG_TG_TOKEN_MAX_LEN];
 	bool use_tls;
-	bool tls_verify;
 	uint16_t port;
 	int max_tokens;
 	int temperature_x100; /* stored as int, e.g. 70 = 0.7 */
@@ -86,9 +84,6 @@ int config_set_provider_id(const char *provider_id);
 
 /** @brief Set TLS mode and port and persist to flash. */
 int config_set_tls(bool use_tls, uint16_t port);
-
-/** @brief Set TLS peer verification and persist to flash. */
-int config_set_tls_verify(bool tls_verify);
 
 /** @brief Set Telegram Bot token and persist to flash. */
 int config_set_tg_token(const char *token);

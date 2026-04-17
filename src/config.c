@@ -29,7 +29,6 @@ LOG_MODULE_REGISTER(zbot_config, LOG_LEVEL_INF);
 
 static struct llm_config g_cfg = {
 	.use_tls = true,
-	.tls_verify = true,
 	.port = 443,
 	.max_tokens = DEFAULT_MAX_TOKENS,
 	.temperature_x100 = DEFAULT_TEMP_X100,
@@ -98,16 +97,6 @@ static int zc_config_set(const char *name, size_t len, settings_read_cb read_cb,
 		rc = read_cb(cb_arg, &v, sizeof(v));
 		if (rc >= 0) {
 			g_cfg.use_tls = (bool)v;
-		}
-		return rc < 0 ? rc : 0;
-	}
-
-	if (strcmp(name, "tls_verify") == 0 && len == sizeof(uint8_t)) {
-		uint8_t v;
-
-		rc = read_cb(cb_arg, &v, sizeof(v));
-		if (rc >= 0) {
-			g_cfg.tls_verify = (bool)v;
 		}
 		return rc < 0 ? rc : 0;
 	}
@@ -297,21 +286,6 @@ int config_set_tls(bool use_tls, uint16_t port)
 	return rc;
 }
 
-int config_set_tls_verify(bool tls_verify)
-{
-	uint8_t v = (uint8_t)tls_verify;
-	int rc;
-
-	g_cfg.tls_verify = tls_verify;
-
-	rc = settings_save_one("zbot/tls_verify", &v, sizeof(v));
-	if (rc < 0) {
-		LOG_ERR("Failed to persist tls_verify: %d", rc);
-	}
-
-	return rc;
-}
-
 bool config_has_api_key(void)
 {
 	return g_cfg.api_key[0] != '\0';
@@ -359,7 +333,6 @@ int config_reset(void)
 {
 	static const struct llm_config defaults = {
 		.use_tls = true,
-		.tls_verify = true,
 		.port = 443,
 		.max_tokens = DEFAULT_MAX_TOKENS,
 		.temperature_x100 = DEFAULT_TEMP_X100,
@@ -374,7 +347,6 @@ int config_reset(void)
 		"zbot/model",
 		"zbot/provider_id",
 		"zbot/use_tls",
-		"zbot/tls_verify",
 		"zbot/port",
 		"zbot/tg_token",
 	};
@@ -399,7 +371,6 @@ void config_print_status(void)
 	printk("  Model    : %s\n", g_cfg.model);
 	printk("  Provider : %s\n", g_cfg.provider_id[0] ? g_cfg.provider_id : "(not set)");
 	printk("  TLS      : %s\n", g_cfg.use_tls ? "yes" : "no");
-	printk("  TLS Vfy  : %s\n", g_cfg.tls_verify ? "yes" : "no");
 	printk("  API Key  : %s\n", g_cfg.api_key[0] ? "*** (set)" : "(not set)");
 	printk("  TG Token : %s\n", g_cfg.tg_token[0] ? "*** (set)" : "(not set)");
 	printk("  Max Tok  : %d\n", g_cfg.max_tokens);

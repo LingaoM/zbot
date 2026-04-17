@@ -20,7 +20,7 @@
 </p>
 
 **Supported boards:** nRF7002-DK (nRF5340 + nRF7002 WiFi), native_sim (Linux host)
-**RTOS:** [Zephyr](https://zephyrproject.org) ≥ latest
+**RTOS:** [Zephyr](https://zephyrproject.org) latest
 **License:** Apache-2.0
 
 ---
@@ -135,7 +135,6 @@ After compression, the rolling summary is written to NVS and injected as prior c
 | `zbot/model` | `char[128]` | Model name |
 | `zbot/provider_id` | `char[64]` | `X-Model-Provider-Id` header |
 | `zbot/use_tls` | `uint8_t` | TLS enabled flag |
-| `zbot/tls_verify` | `uint8_t` | TLS peer verification (default: on) |
 | `zbot/port` | `uint16_t` | TCP port |
 | `zbot/tg_token` | `char[128]` | Telegram Bot token |
 | `wifi/...` | — | Managed by Zephyr `wifi_credentials` subsystem |
@@ -269,7 +268,6 @@ uart:~$
 | `zbot model <name>` | Set model name |
 | `zbot provider <id>` | Set `X-Model-Provider-Id` header |
 | `zbot tls <on\|off> [port]` | Enable/disable TLS and set port |
-| `zbot tls_verify <on\|off>` | Enable/disable TLS peer certificate verification |
 | `zbot status` | Show current config and agent state |
 
 ### WiFi (nRF7002-DK only)
@@ -442,7 +440,6 @@ zbot/
 - **API key** is saved to NVS flash. Use `zbot key_delete` to remove it.
 - **Telegram token** is saved to NVS flash. Use `zbot config_reset` to wipe it.
 - **WiFi passphrase** is stored in flash as plain text. Acceptable for dev boards.
-- **TLS peer verification** is enabled by default. Disable with `zbot tls_verify off` only for development.
 - **NVS summary** is stored as plain text. Avoid sensitive information in conversations.
 
 ---

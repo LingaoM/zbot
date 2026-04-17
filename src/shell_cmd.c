@@ -16,7 +16,6 @@
  *   zbot model <model>                -- Set model name
  *   zbot provider <id>                -- Set X-Model-Provider-Id header
  *   zbot tls <on|off> [port]          -- Configure TLS
- *   zbot tls_verify <on|off>          -- Enable/disable TLS peer certificate verification
  *   zbot status                       -- Show current config status
  *   zbot history                      -- Show conversation history
  *   zbot summary                      -- Show persisted NVS summary
@@ -235,32 +234,6 @@ static int cmd_tls(const struct shell *sh, size_t argc, char **argv)
 			    port);
 	} else {
 		shell_error(sh, "Failed to persist TLS config: %d", rc);
-	}
-	return rc;
-}
-
-/* ------------------------------------------------------------------ */
-/* zbot tls_verify                                                    */
-/* ------------------------------------------------------------------ */
-
-static int cmd_tls_verify(const struct shell *sh, size_t argc, char **argv)
-{
-	bool verify;
-	int rc;
-
-	if (argc < 2) {
-		shell_print(sh, "Usage: zbot tls_verify <on|off>");
-		return -EINVAL;
-	}
-
-	verify = (strcmp(argv[1], "on") == 0 || strcmp(argv[1], "1") == 0 ||
-		  strcmp(argv[1], "yes") == 0);
-
-	rc = config_set_tls_verify(verify);
-	if (rc == 0) {
-		shell_print(sh, "TLS peer verify: %s (saved to flash)", verify ? "on" : "off");
-	} else {
-		shell_error(sh, "Failed to persist tls_verify: %d", rc);
 	}
 	return rc;
 }
@@ -710,8 +683,6 @@ SHELL_STATIC_SUBCMD_SET_CREATE(sub_zbot,
 	SHELL_CMD_ARG(model, NULL, "Set model: model <name>", cmd_model, 2, 0),
 	SHELL_CMD_ARG(provider, NULL, "Set X-Model-Provider-Id: provider <id>", cmd_provider, 2, 0),
 	SHELL_CMD_ARG(tls, NULL, "Configure TLS: tls <on|off> [port]", cmd_tls, 2, 1),
-	SHELL_CMD_ARG(tls_verify, NULL, "TLS peer verify: tls_verify <on|off>", cmd_tls_verify, 2,
-		      0),
 	SHELL_CMD(status, NULL, "Show current configuration", cmd_status),
 #if defined(CONFIG_WIFI)
 	SHELL_CMD(wifi, &sub_wifi, "WiFi commands", NULL),

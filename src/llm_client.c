@@ -232,8 +232,7 @@ static int resolve_and_connect(const struct llm_config *cfg)
 	}
 
 	if (cfg->use_tls) {
-		sec_tag_t sec_tag_list[] = {CA_CERTIFICATE_TAG};
-		int verify;
+		int verify = TLS_PEER_VERIFY_NONE;
 
 		sock = zsock_socket(AF_INET, SOCK_STREAM, IPPROTO_TLS_1_2);
 		if (sock < 0) {
@@ -242,15 +241,6 @@ static int resolve_and_connect(const struct llm_config *cfg)
 			return -errno;
 		}
 
-		rc = zsock_setsockopt(sock, SOL_TLS, TLS_SEC_TAG_LIST,
-				      sec_tag_list, sizeof(sec_tag_list));
-		if (rc < 0) {
-			LOG_ERR("TLS_SEC_TAG_LIST failed: errno=%d", -errno);
-			zsock_freeaddrinfo(res);
-			return -errno;
-		}
-
-		verify = cfg->tls_verify ? TLS_PEER_VERIFY_REQUIRED : TLS_PEER_VERIFY_NONE;
 		rc = zsock_setsockopt(sock, SOL_TLS, TLS_PEER_VERIFY, &verify, sizeof(verify));
 		if (rc < 0) {
 			LOG_ERR("TLS_PEER_VERIFY failed: errno=%d", -errno);
